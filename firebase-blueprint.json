@@ -1,0 +1,351 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Profil pengguna terdaftar pada aplikasi",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID pengguna"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nama lengkap pengguna"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Alamat email pengguna"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL foto avatar pengguna"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp ISO saat user pertama kali dibuat"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp ISO pembaruan data pengguna"
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Akun rekening atau dompet keuangan pengguna",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik dokumen akun"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID pemilik akun"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Nama akun (misal: Cash, Bank BCA, DANA)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["Cash", "Bank", "E-Wallet", "Lainnya"],
+          "description": "Jenis akun keuangan"
+        },
+        "initialBalance": {
+          "type": "number",
+          "description": "Saldo awal saat akun dibuat"
+        },
+        "currentBalance": {
+          "type": "number",
+          "description": "Saldo berjalan akun terkini"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "Catatan opsional mengenai akun"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Status keaktifan akun"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp pembuatan"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp pembaruan"
+        }
+      },
+      "required": ["id", "userId", "name", "type", "initialBalance", "currentBalance", "isActive"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Kategori transaksi pemasukan atau pengeluaran",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik kategori"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID pemilik kategori"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Nama kategori"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["income", "expense"],
+          "description": "Jenis kategori pemasukan atau pengeluaran"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Nama identifier icon Lucide"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Status keaktifan kategori"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp pembuatan"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp pembaruan"
+        }
+      },
+      "required": ["id", "userId", "name", "type", "isActive"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Catatan transaksi pemasukan, pengeluaran, atau transfer",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID unik transaksi"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID pemilik transaksi"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["income", "expense", "transfer"],
+          "description": "Jenis transaksi"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Nominal transaksi dalam Rupiah (integer positif)"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "ID referensi kategori"
+        },
+        "categoryName": {
+          "type": "string",
+          "description": "Nama kategori saat transaksi dicatat"
+        },
+        "accountId": {
+          "type": "string",
+          "description": "ID referensi akun keuangan (asal)"
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Nama akun keuangan saat transaksi dicatat"
+        },
+        "toAccountId": {
+          "type": "string",
+          "description": "ID referensi akun tujuan (untuk transfer)"
+        },
+        "toAccountName": {
+          "type": "string",
+          "description": "Nama akun tujuan (untuk transfer)"
+        },
+        "date": {
+          "type": "string",
+          "description": "Tanggal transaksi format YYYY-MM-DD"
+        },
+        "time": {
+          "type": "string",
+          "description": "Waktu transaksi format HH:mm"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Catatan atau keterangan transaksi"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp pembuatan transaksi"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp pembaruan transaksi"
+        }
+      },
+      "required": ["id", "userId", "type", "amount", "accountId", "accountName", "date", "time"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Anggaran batas pengeluaran kategori bulanan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik budget" },
+        "userId": { "type": "string", "description": "UID pemilik" },
+        "categoryId": { "type": "string", "description": "ID kategori yang dianggarkan" },
+        "categoryName": { "type": "string", "description": "Nama kategori" },
+        "periodMonth": { "type": "string", "description": "Bulan anggaran YYYY-MM" },
+        "amount": { "type": "number", "description": "Batas nominal anggaran" },
+        "createdAt": { "type": "string", "description": "Timestamp dibuat" },
+        "updatedAt": { "type": "string", "description": "Timestamp diubah" }
+      },
+      "required": ["id", "userId", "categoryId", "categoryName", "periodMonth", "amount"]
+    },
+    "SavingsGoal": {
+      "title": "SavingsGoal",
+      "description": "Target tabungan dengan capaian dana",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik target tabungan" },
+        "userId": { "type": "string", "description": "UID pemilik" },
+        "name": { "type": "string", "description": "Nama target tabungan" },
+        "targetAmount": { "type": "number", "description": "Target nominal" },
+        "currentAmount": { "type": "number", "description": "Nominal terkumpul" },
+        "targetDate": { "type": "string", "description": "Target tanggal pencapaian" },
+        "accountId": { "type": "string", "description": "Akun penampung (opsional)" },
+        "accountName": { "type": "string", "description": "Nama akun penampung" },
+        "status": { "type": "string", "enum": ["in_progress", "achieved"], "description": "Status capaian" },
+        "notes": { "type": "string", "description": "Catatan tabungan" },
+        "createdAt": { "type": "string", "description": "Timestamp dibuat" },
+        "updatedAt": { "type": "string", "description": "Timestamp diubah" }
+      },
+      "required": ["id", "userId", "name", "targetAmount", "currentAmount", "targetDate", "status"]
+    },
+    "Debt": {
+      "title": "Debt",
+      "description": "Catatan hutang ke pihak lain",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik hutang" },
+        "userId": { "type": "string", "description": "UID pemilik" },
+        "personName": { "type": "string", "description": "Nama pihak pemberi pinjaman" },
+        "totalAmount": { "type": "number", "description": "Nominal pokok hutang" },
+        "paidAmount": { "type": "number", "description": "Nominal yang sudah dibayarkan" },
+        "dueDate": { "type": "string", "description": "Tanggal jatuh tempo YYYY-MM-DD" },
+        "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid"], "description": "Status lunas" },
+        "notes": { "type": "string", "description": "Catatan hutang" },
+        "createdAt": { "type": "string", "description": "Timestamp dibuat" },
+        "updatedAt": { "type": "string", "description": "Timestamp diubah" }
+      },
+      "required": ["id", "userId", "personName", "totalAmount", "paidAmount", "dueDate", "status"]
+    },
+    "Receivable": {
+      "title": "Receivable",
+      "description": "Catatan piutang dari pihak lain",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik piutang" },
+        "userId": { "type": "string", "description": "UID pemilik" },
+        "personName": { "type": "string", "description": "Nama peminjam" },
+        "totalAmount": { "type": "number", "description": "Nominal pokok piutang" },
+        "receivedAmount": { "type": "number", "description": "Nominal yang sudah diterima" },
+        "dueDate": { "type": "string", "description": "Tanggal jatuh tempo YYYY-MM-DD" },
+        "status": { "type": "string", "enum": ["unpaid", "partially_paid", "paid"], "description": "Status lunas" },
+        "notes": { "type": "string", "description": "Catatan piutang" },
+        "createdAt": { "type": "string", "description": "Timestamp dibuat" },
+        "updatedAt": { "type": "string", "description": "Timestamp diubah" }
+      },
+      "required": ["id", "userId", "personName", "totalAmount", "receivedAmount", "dueDate", "status"]
+    },
+    "RecurringTransaction": {
+      "title": "RecurringTransaction",
+      "description": "Jadwal transaksi rutin dan berulang",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik transaksi rutin" },
+        "userId": { "type": "string", "description": "UID pemilik" },
+        "title": { "type": "string", "description": "Judul transaksi rutin" },
+        "type": { "type": "string", "enum": ["income", "expense", "transfer"], "description": "Jenis transaksi" },
+        "amount": { "type": "number", "description": "Nominal transaksi" },
+        "categoryId": { "type": "string", "description": "ID kategori" },
+        "categoryName": { "type": "string", "description": "Nama kategori" },
+        "accountId": { "type": "string", "description": "ID akun asal" },
+        "accountName": { "type": "string", "description": "Nama akun asal" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly", "yearly"], "description": "Frekuensi jadwal" },
+        "nextExecutionDate": { "type": "string", "description": "Tanggal eksekusi berikutnya YYYY-MM-DD" },
+        "autoExecute": { "type": "boolean", "description": "Otomatis catat atau konfirmasi" },
+        "isActive": { "type": "boolean", "description": "Status aktif" },
+        "createdAt": { "type": "string", "description": "Timestamp dibuat" },
+        "updatedAt": { "type": "string", "description": "Timestamp diubah" }
+      },
+      "required": ["id", "userId", "title", "type", "amount", "accountId", "accountName", "frequency", "nextExecutionDate", "isActive"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "Data profil pengguna"
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/entities/Account"
+      },
+      "description": "Daftar akun keuangan milik pengguna"
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": {
+        "$ref": "#/entities/Category"
+      },
+      "description": "Daftar kategori transaksi milik pengguna"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": {
+        "$ref": "#/entities/Transaction"
+      },
+      "description": "Daftar riwayat transaksi keuangan milik pengguna"
+    },
+    "/users/{userId}/budgets/{budgetId}": {
+      "schema": {
+        "$ref": "#/entities/Budget"
+      },
+      "description": "Daftar anggaran bulanan kategori"
+    },
+    "/users/{userId}/savingsGoals/{goalId}": {
+      "schema": {
+        "$ref": "#/entities/SavingsGoal"
+      },
+      "description": "Daftar target tabungan pengguna"
+    },
+    "/users/{userId}/debts/{debtId}": {
+      "schema": {
+        "$ref": "#/entities/Debt"
+      },
+      "description": "Daftar hutang pengguna"
+    },
+    "/users/{userId}/receivables/{receivableId}": {
+      "schema": {
+        "$ref": "#/entities/Receivable"
+      },
+      "description": "Daftar piutang pengguna"
+    },
+    "/users/{userId}/recurringTransactions/{recurringId}": {
+      "schema": {
+        "$ref": "#/entities/RecurringTransaction"
+      },
+      "description": "Daftar jadwal transaksi berulang pengguna"
+    }
+  }
+}

@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidAccountData(userId, data) {
+      return data.userId == userId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        (data.type == 'Cash' || data.type == 'Bank' || data.type == 'E-Wallet' || data.type == 'Lainnya') &&
+        data.initialBalance is number &&
+        data.currentBalance is number &&
+        data.isActive is bool;
+    }
+
+    function isValidCategoryData(userId, data) {
+      return data.userId == userId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 80 &&
+        (data.type == 'income' || data.type == 'expense') &&
+        data.isActive is bool;
+    }
+
+    function isValidTransactionData(userId, data) {
+      return data.userId == userId &&
+        (data.type == 'income' || data.type == 'expense' || data.type == 'transfer') &&
+        data.amount is number && data.amount > 0 &&
+        data.accountId is string && data.accountId.size() > 0 &&
+        data.accountName is string && data.accountName.size() > 0 &&
+        data.date is string && data.date.size() >= 10 &&
+        data.time is string;
+    }
+
+    function isValidBudgetData(userId, data) {
+      return data.userId == userId &&
+        data.periodMonth is string && data.periodMonth.size() >= 7 &&
+        data.amount is number && data.amount > 0;
+    }
+
+    function isValidSavingsData(userId, data) {
+      return data.userId == userId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.targetAmount is number && data.targetAmount > 0 &&
+        data.currentAmount is number;
+    }
+
+    function isValidDebtData(userId, data) {
+      return data.userId == userId &&
+        data.personName is string && data.personName.size() > 0 && data.personName.size() <= 100 &&
+        data.totalAmount is number && data.totalAmount > 0 &&
+        data.paidAmount is number;
+    }
+
+    function isValidReceivableData(userId, data) {
+      return data.userId == userId &&
+        data.personName is string && data.personName.size() > 0 && data.personName.size() <= 100 &&
+        data.totalAmount is number && data.totalAmount > 0 &&
+        data.receivedAmount is number;
+    }
+
+    function isValidRecurringData(userId, data) {
+      return data.userId == userId &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+        (data.type == 'income' || data.type == 'expense' || data.type == 'transfer') &&
+        data.amount is number && data.amount > 0 &&
+        (data.frequency == 'daily' || data.frequency == 'weekly' || data.frequency == 'monthly' || data.frequency == 'yearly');
+    }
+
+    // User document
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId) && request.resource.data.uid == userId;
+      allow delete: if false; // Users cannot delete their profile root document directly
+
+      // Accounts subcollection
+      match /accounts/{accountId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(accountId) && isValidAccountData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(accountId) && isValidAccountData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(accountId);
+      }
+
+      // Categories subcollection
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(categoryId) && isValidCategoryData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(categoryId) && isValidCategoryData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(categoryId);
+      }
+
+      // Transactions subcollection
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(transactionId) && isValidTransactionData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(transactionId) && isValidTransactionData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(transactionId);
+      }
+
+      // Budgets subcollection
+      match /budgets/{budgetId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(budgetId) && isValidBudgetData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(budgetId) && isValidBudgetData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(budgetId);
+      }
+
+      // Savings Goals subcollection
+      match /savingsGoals/{goalId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(goalId) && isValidSavingsData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(goalId) && isValidSavingsData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(goalId);
+      }
+
+      // Debts subcollection
+      match /debts/{debtId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(debtId) && isValidDebtData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(debtId) && isValidDebtData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(debtId);
+      }
+
+      // Receivables subcollection
+      match /receivables/{receivableId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(receivableId) && isValidReceivableData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(receivableId) && isValidReceivableData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(receivableId);
+      }
+
+      // Recurring Transactions subcollection
+      match /recurringTransactions/{recurringId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(recurringId) && isValidRecurringData(userId, request.resource.data);
+        allow update: if isOwner(userId) && isValidId(recurringId) && isValidRecurringData(userId, request.resource.data);
+        allow delete: if isOwner(userId) && isValidId(recurringId);
+      }
+    }
+  }
+}
