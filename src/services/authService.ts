@@ -15,6 +15,15 @@ export function getIndonesianAuthErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return 'Terjadi kendala autentikasi. Silakan coba lagi.';
   const message = error.message;
 
+  if (message.includes('auth/popup-closed-by-user')) {
+    return 'Jendela masuk Google ditutup sebelum proses selesai. Silakan klik "Masuk dengan Google" kembali.';
+  }
+  if (message.includes('auth/popup-blocked')) {
+    return 'Jendela pop-up Google diblokir oleh browser. Izinkan jendela pop-up untuk situs ini lalu coba lagi.';
+  }
+  if (message.includes('auth/cancelled-popup-request')) {
+    return 'Permintaan masuk sebelumnya dibatalkan karena ada proses baru.';
+  }
   if (
     message.includes('auth/invalid-credential') ||
     message.includes('auth/user-not-found') ||
@@ -24,7 +33,7 @@ export function getIndonesianAuthErrorMessage(error: unknown): string {
     return 'Email atau password tidak sesuai.';
   }
   if (message.includes('auth/email-already-in-use')) {
-    return 'Email ini sudah terdaftar. Silakan masuk atau gunakan email lain.';
+    return 'Email ini sudah terdaftar. Silakan gunakan Masuk dengan Google atau email lain.';
   }
   if (message.includes('auth/weak-password')) {
     return 'Kata sandi terlalu singkat (minimal 6 karakter).';
@@ -32,17 +41,14 @@ export function getIndonesianAuthErrorMessage(error: unknown): string {
   if (message.includes('auth/invalid-email')) {
     return 'Format alamat email tidak valid.';
   }
-  if (message.includes('auth/popup-closed-by-user')) {
-    return 'Jendela masuk dibatalkan oleh pengguna.';
-  }
   if (message.includes('auth/operation-not-allowed')) {
-    return 'Metode login ini belum diaktifkan di Firebase Console. Gunakan Masuk dengan Google.';
+    return 'Metode login Email/Sandi belum diaktifkan di Firebase Console. Silakan gunakan tombol "Masuk dengan Google" yang sudah aktif dan siap digunakan.';
   }
   if (message.includes('network-request-failed')) {
-    return 'Koneksi internet bermasalah. Periksa jaringan Anda.';
+    return 'Koneksi internet bermasalah. Periksa jaringan Anda dan coba lagi.';
   }
 
-  return 'Gagal melakukan otentikasi. Silakan periksa kembali data Anda.';
+  return 'Gagal melakukan otentikasi. Silakan gunakan tombol Masuk dengan Google.';
 }
 
 export async function syncUserProfile(user: FirebaseUser, overrideName?: string): Promise<UserProfile> {
@@ -97,6 +103,7 @@ export async function registerWithEmail(
 
 export async function loginWithGoogle(): Promise<UserProfile> {
   const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
   const credential = await signInWithPopup(auth, provider);
   return await syncUserProfile(credential.user);
 }
