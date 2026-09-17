@@ -12,6 +12,8 @@ import {
   ChevronUp,
   Sparkles,
   Info,
+  ExternalLink,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   loginWithEmail,
@@ -221,13 +223,36 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
 
             {showEmailSection && (
               <div className="mt-4 space-y-4 pt-2">
-                {/* Info pemberitahuan tentang konfigurasi Firebase Console */}
-                <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-800 flex items-start space-x-2">
-                  <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-[11px] leading-relaxed">
-                    <strong>Catatan Firebase:</strong> Metode Email/Sandi membutuhkan aktivasi di{' '}
-                    <em>Firebase Console &rarr; Authentication &rarr; Sign-in method &rarr; Email/Password</em>.
-                    Jika belum diaktifkan, gunakan <strong>Masuk dengan Google</strong> di atas.
+                {/* Info & Panduan Aktivasi Firebase Console */}
+                <div className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 space-y-2.5">
+                  <div className="flex items-start space-x-2">
+                    <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-amber-900 text-xs">
+                        Panduan Aktivasi Email/Password di Firebase:
+                      </p>
+                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                        Jika ingin mendaftar & masuk dengan email manual, aktifkan fiturnya di Firebase Console:
+                      </p>
+                    </div>
+                  </div>
+
+                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-900/90 pl-1 font-medium">
+                    <li>Buka menu <strong>Authentication</strong> &rarr; tab <strong>Sign-in method</strong>.</li>
+                    <li>Klik baris <strong>Email/Password</strong>.</li>
+                    <li>Nyalakan toggle <strong>Enable</strong> pertama, lalu klik <strong>Save</strong>.</li>
+                  </ol>
+
+                  <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                    <a
+                      href="https://console.firebase.google.com/project/gen-lang-client-0979887913/authentication/providers"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
+                    >
+                      <span>Buka Firebase Console Proyek</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
                   </div>
                 </div>
 
