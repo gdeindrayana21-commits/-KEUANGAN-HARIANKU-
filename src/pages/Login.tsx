@@ -21,6 +21,7 @@ import {
   loginWithGoogle,
   getIndonesianAuthErrorMessage,
 } from '../services/authService';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 
 interface LoginProps {
   onSuccess: () => void;
@@ -389,8 +390,11 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             )}
           </div>
 
+          {/* Install on Mobile Phone Card */}
+          <PWAInstallButton variant="login" />
+
           {/* Privacy & Isolation Note */}
-          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center space-x-1.5 text-[11px] text-slate-400">
+          <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center space-x-1.5 text-[11px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>Data Multi-User Terisolasi & Aman di Firebase</span>
           </div>

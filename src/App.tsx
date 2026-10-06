@@ -98,12 +98,15 @@ import { SavingsGoals } from './pages/SavingsGoals';
 import { Debts } from './pages/Debts';
 import { RecurringTransactions } from './pages/RecurringTransactions';
 import { BackupRestore } from './pages/BackupRestore';
+import { PWAInstallButton } from './components/PWAInstallButton';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isMobilePreview, setIsMobilePreview] = useState<boolean>(false);
 
   // Data states
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -607,226 +610,258 @@ export default function App() {
   ].includes(activeTab);
 
   return (
-    <div id="app-root" className="min-h-screen bg-slate-100 flex flex-col antialiased text-slate-900">
-      {/* Top Navbar */}
-      <Navbar
-        user={userProfile}
-        isOnline={isOnline}
-        onOpenNewTransaction={handleOpenCreateTransaction}
-        onLogout={handleLogout}
-      />
-
-      {/* Main Layout: Desktop Sidebar + Content */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
-        {/* Desktop Sidebar */}
-        <Sidebar
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
+    <div
+      id="app-root"
+      className={`min-h-screen flex flex-col antialiased text-slate-900 ${
+        isMobilePreview ? 'bg-slate-800 py-4 px-2 items-center justify-start' : 'bg-slate-100'
+      }`}
+    >
+      <div
+        className={`w-full flex-1 flex flex-col ${
+          isMobilePreview
+            ? 'max-w-[412px] bg-slate-100 rounded-3xl shadow-2xl border-4 border-slate-700 overflow-hidden relative min-h-[840px]'
+            : ''
+        }`}
+      >
+        {/* Top Navbar */}
+        <Navbar
           user={userProfile}
+          isOnline={isOnline}
+          onOpenNewTransaction={handleOpenCreateTransaction}
           onLogout={handleLogout}
+          isMobilePreview={isMobilePreview}
+          onToggleMobilePreview={() => setIsMobilePreview((prev) => !prev)}
         />
 
-        {/* Page Content View Area */}
-        <main
-          id="main-content-area"
-          className="flex-1 p-4 sm:p-6 lg:p-8 pb-28 md:pb-8 overflow-y-auto max-w-full space-y-5"
-        >
-          {/* Global Toast Notification */}
-          {toast && (
-            <div
-              id="global-toast-notification"
-              className={`fixed top-16 right-4 sm:right-6 z-50 flex items-center space-x-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all transform duration-200 animate-in fade-in slide-in-from-top-2 ${
-                toast.type === 'success'
-                  ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-900/20'
-                  : 'bg-rose-600 text-white border-rose-700 shadow-rose-900/20'
-              }`}
-            >
-              {toast.type === 'success' ? (
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              )}
-              <span>{toast.message}</span>
-              <button
-                type="button"
-                onClick={() => setToast(null)}
-                className="p-1 hover:bg-white/20 rounded-md transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Sub Navigation when on any Recap tab */}
-          {isRecapTab && (
-            <div className="no-print">
-              <RecapNavigation
-                activeTab={activeTab}
-                onSelectTab={setActiveTab}
-              />
-            </div>
-          )}
-
-          {/* Active View Container */}
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              accounts={accounts}
-              transactions={transactions}
-              onOpenNewTransaction={handleOpenCreateTransaction}
-              onEditTransaction={handleOpenEditTransaction}
-              onDeleteTransaction={handleDeleteTransactionClick}
-              onViewAllTransactions={() => setActiveTab('transactions')}
-            />
-          )}
-
-          {activeTab === 'daily_recap' && (
-            <DailyRecap
-              transactions={transactions}
-              onOpenNewTransaction={handleOpenCreateTransaction}
-            />
-          )}
-
-          {activeTab === 'weekly_recap' && (
-            <WeeklyRecap
-              transactions={transactions}
-            />
-          )}
-
-          {activeTab === 'monthly_recap' && (
-            <MonthlyRecap
-              transactions={transactions}
-            />
-          )}
-
-          {activeTab === 'yearly_recap' && (
-            <YearlyRecap
-              transactions={transactions}
-            />
-          )}
-
-          {activeTab === 'reports' && (
-            <Reports
-              transactions={transactions}
-              accounts={accounts}
-              categories={categories}
-            />
-          )}
-
-          {activeTab === 'transactions' && (
-            <TransactionsPage
-              transactions={transactions}
-              accounts={accounts}
-              categories={categories}
-              onOpenNewTransaction={handleOpenCreateTransaction}
-              onEditTransaction={handleOpenEditTransaction}
-              onDeleteTransaction={handleDeleteTransactionClick}
-            />
-          )}
-
-          {/* Phase 3 Views */}
-          {activeTab === 'budgets' && (
-            <Budgets
-              budgets={budgets}
-              categories={categories}
-              transactions={transactions}
-              onCreateBudget={handleCreateBudget}
-              onUpdateBudget={handleUpdateBudget}
-              onDeleteBudget={handleDeleteBudget}
-            />
-          )}
-
-          {activeTab === 'savings' && (
-            <SavingsGoals
-              savingsGoals={savingsGoals}
-              accounts={accounts}
-              onCreateGoal={handleCreateSavingsGoal}
-              onUpdateGoal={handleUpdateSavingsGoal}
-              onAdjustAmount={handleAdjustSavingsGoal}
-              onDeleteGoal={handleDeleteSavingsGoal}
-            />
-          )}
-
-          {activeTab === 'debts' && (
-            <Debts
-              debts={debts}
-              receivables={receivables}
-              onCreateDebt={handleCreateDebt}
-              onUpdateDebt={handleUpdateDebt}
-              onAddDebtPayment={handleAddDebtPayment}
-              onDeleteDebt={handleDeleteDebt}
-              onCreateReceivable={handleCreateReceivable}
-              onUpdateReceivable={handleUpdateReceivable}
-              onAddReceivablePayment={handleAddReceivablePayment}
-              onDeleteReceivable={handleDeleteReceivable}
-            />
-          )}
-
-          {activeTab === 'recurring' && (
-            <RecurringTransactions
-              recurringTransactions={recurringTransactions}
-              categories={categories}
-              accounts={accounts}
-              onCreateRecurring={handleCreateRecurring}
-              onUpdateRecurring={handleUpdateRecurring}
-              onExecuteRecurring={handleExecuteRecurring}
-              onToggleActive={handleToggleRecurringActive}
-              onDeleteRecurring={handleDeleteRecurring}
-            />
-          )}
-
-          {activeTab === 'backup_restore' && (
-            <BackupRestore
-              userId={currentUser.uid}
-              accounts={accounts}
-              categories={categories}
-              transactions={transactions}
-              budgets={budgets}
-              savingsGoals={savingsGoals}
-              debts={debts}
-              receivables={receivables}
-              recurringTransactions={recurringTransactions}
-              onDataRestored={() => showToast('Data berhasil dipulihkan!')}
-            />
-          )}
-
-          {activeTab === 'accounts' && (
-            <AccountsPage
-              accounts={accounts}
-              onCreateAccount={handleCreateAccount}
-              onUpdateAccount={handleUpdateAccount}
-              onToggleAccountActive={handleToggleAccountActive}
-              onDeleteAccount={handleDeleteAccount}
-              onRecalculateAll={handleRecalculateAll}
-            />
-          )}
-
-          {activeTab === 'categories' && (
-            <CategoriesPage
-              categories={categories}
-              onCreateCategory={handleCreateCategory}
-              onUpdateCategory={handleUpdateCategory}
-              onToggleCategoryActive={handleToggleCategoryActive}
-              onDeleteCategory={handleDeleteCategory}
-            />
-          )}
-
-          {activeTab === 'settings' && (
-            <SettingsPage
+        {/* Main Layout: Desktop Sidebar + Content */}
+        <div className="flex-1 flex max-w-7xl w-full mx-auto">
+          {/* Desktop Sidebar (hidden when simulating mobile phone viewport) */}
+          {!isMobilePreview && (
+            <Sidebar
+              activeTab={activeTab}
+              onSelectTab={setActiveTab}
               user={userProfile}
-              isOnline={isOnline}
               onLogout={handleLogout}
-              onRecalculateAll={handleRecalculateAll}
             />
           )}
-        </main>
+
+          {/* Page Content View Area */}
+          <main
+            id="main-content-area"
+            className={`flex-1 p-4 ${
+              isMobilePreview ? 'pb-28' : 'sm:p-6 lg:p-8 pb-28 md:pb-8'
+            } overflow-y-auto max-w-full space-y-5`}
+          >
+            {/* Global Toast Notification */}
+            {toast && (
+              <div
+                id="global-toast-notification"
+                className={`fixed top-16 right-4 sm:right-6 z-50 flex items-center space-x-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all transform duration-200 animate-in fade-in slide-in-from-top-2 ${
+                  toast.type === 'success'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-900/20'
+                    : 'bg-rose-600 text-white border-rose-700 shadow-rose-900/20'
+                }`}
+              >
+                {toast.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                )}
+                <span>{toast.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setToast(null)}
+                  className="p-1 hover:bg-white/20 rounded-md transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Sub Navigation when on any Recap tab */}
+            {isRecapTab && (
+              <div className="no-print">
+                <RecapNavigation
+                  activeTab={activeTab}
+                  onSelectTab={setActiveTab}
+                />
+              </div>
+            )}
+
+            {/* Active View Container */}
+            {activeTab === 'dashboard' && (
+              <>
+                <PWAInstallButton
+                  variant="banner"
+                  isMobilePreview={isMobilePreview}
+                  onToggleMobilePreview={() => setIsMobilePreview((prev) => !prev)}
+                />
+                <Dashboard
+                  accounts={accounts}
+                  transactions={transactions}
+                  onOpenNewTransaction={handleOpenCreateTransaction}
+                  onEditTransaction={handleOpenEditTransaction}
+                  onDeleteTransaction={handleDeleteTransactionClick}
+                  onViewAllTransactions={() => setActiveTab('transactions')}
+                />
+              </>
+            )}
+
+            {activeTab === 'daily_recap' && (
+              <DailyRecap
+                transactions={transactions}
+                onOpenNewTransaction={handleOpenCreateTransaction}
+              />
+            )}
+
+            {activeTab === 'weekly_recap' && (
+              <WeeklyRecap
+                transactions={transactions}
+              />
+            )}
+
+            {activeTab === 'monthly_recap' && (
+              <MonthlyRecap
+                transactions={transactions}
+              />
+            )}
+
+            {activeTab === 'yearly_recap' && (
+              <YearlyRecap
+                transactions={transactions}
+              />
+            )}
+
+            {activeTab === 'reports' && (
+              <Reports
+                transactions={transactions}
+                accounts={accounts}
+                categories={categories}
+              />
+            )}
+
+            {activeTab === 'transactions' && (
+              <TransactionsPage
+                transactions={transactions}
+                accounts={accounts}
+                categories={categories}
+                onOpenNewTransaction={handleOpenCreateTransaction}
+                onEditTransaction={handleOpenEditTransaction}
+                onDeleteTransaction={handleDeleteTransactionClick}
+              />
+            )}
+
+            {/* Phase 3 Views */}
+            {activeTab === 'budgets' && (
+              <Budgets
+                budgets={budgets}
+                categories={categories}
+                transactions={transactions}
+                onCreateBudget={handleCreateBudget}
+                onUpdateBudget={handleUpdateBudget}
+                onDeleteBudget={handleDeleteBudget}
+              />
+            )}
+
+            {activeTab === 'savings' && (
+              <SavingsGoals
+                savingsGoals={savingsGoals}
+                accounts={accounts}
+                onCreateGoal={handleCreateSavingsGoal}
+                onUpdateGoal={handleUpdateSavingsGoal}
+                onAdjustAmount={handleAdjustSavingsGoal}
+                onDeleteGoal={handleDeleteSavingsGoal}
+              />
+            )}
+
+            {activeTab === 'debts' && (
+              <Debts
+                debts={debts}
+                receivables={receivables}
+                onCreateDebt={handleCreateDebt}
+                onUpdateDebt={handleUpdateDebt}
+                onAddDebtPayment={handleAddDebtPayment}
+                onDeleteDebt={handleDeleteDebt}
+                onCreateReceivable={handleCreateReceivable}
+                onUpdateReceivable={handleUpdateReceivable}
+                onAddReceivablePayment={handleAddReceivablePayment}
+                onDeleteReceivable={handleDeleteReceivable}
+              />
+            )}
+
+            {activeTab === 'recurring' && (
+              <RecurringTransactions
+                recurringTransactions={recurringTransactions}
+                categories={categories}
+                accounts={accounts}
+                onCreateRecurring={handleCreateRecurring}
+                onUpdateRecurring={handleUpdateRecurring}
+                onExecuteRecurring={handleExecuteRecurring}
+                onToggleActive={handleToggleRecurringActive}
+                onDeleteRecurring={handleDeleteRecurring}
+              />
+            )}
+
+            {activeTab === 'backup_restore' && (
+              <BackupRestore
+                userId={currentUser.uid}
+                accounts={accounts}
+                categories={categories}
+                transactions={transactions}
+                budgets={budgets}
+                savingsGoals={savingsGoals}
+                debts={debts}
+                receivables={receivables}
+                recurringTransactions={recurringTransactions}
+                onDataRestored={() => showToast('Data berhasil dipulihkan!')}
+              />
+            )}
+
+            {activeTab === 'accounts' && (
+              <AccountsPage
+                accounts={accounts}
+                onCreateAccount={handleCreateAccount}
+                onUpdateAccount={handleUpdateAccount}
+                onToggleAccountActive={handleToggleAccountActive}
+                onDeleteAccount={handleDeleteAccount}
+                onRecalculateAll={handleRecalculateAll}
+              />
+            )}
+
+            {activeTab === 'categories' && (
+              <CategoriesPage
+                categories={categories}
+                onCreateCategory={handleCreateCategory}
+                onUpdateCategory={handleUpdateCategory}
+                onToggleCategoryActive={handleToggleCategoryActive}
+                onDeleteCategory={handleDeleteCategory}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <SettingsPage
+                user={userProfile}
+                isOnline={isOnline}
+                onLogout={handleLogout}
+                onRecalculateAll={handleRecalculateAll}
+                isMobilePreview={isMobilePreview}
+                onToggleMobilePreview={() => setIsMobilePreview((prev) => !prev)}
+              />
+            )}
+          </main>
+        </div>
+
+        {/* Mobile Bottom Navigation & Quick FAB */}
+        <BottomNavigation
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          onOpenNewTransaction={handleOpenCreateTransaction}
+          forceMobile={isMobilePreview}
+        />
       </div>
 
-      {/* Mobile Bottom Navigation & Quick FAB */}
-      <BottomNavigation
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
-        onOpenNewTransaction={handleOpenCreateTransaction}
-      />
+      {/* Offline Mode Indicator */}
+      <OfflineIndicator />
 
       {/* Transaction Modal (Add or Edit) */}
       <TransactionForm

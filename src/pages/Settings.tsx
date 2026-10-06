@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { User, Shield, Wifi, WifiOff, RefreshCw, LogOut, CheckCircle2, Database, Info } from 'lucide-react';
 import { UserProfile } from '../types';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 
 interface SettingsPageProps {
   user: UserProfile | null;
   isOnline: boolean;
   onLogout: () => void;
   onRecalculateAll: () => Promise<void>;
+  isMobilePreview?: boolean;
+  onToggleMobilePreview?: () => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({
@@ -14,6 +17,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   isOnline,
   onLogout,
   onRecalculateAll,
+  isMobilePreview = false,
+  onToggleMobilePreview,
 }) => {
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
@@ -39,9 +44,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           Pengaturan & Profil
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Informasi akun, status database, dan sinkronisasi data.
+          Informasi akun, instalasi aplikasi HP, status database, dan sinkronisasi data.
         </p>
       </div>
+
+      {/* Instalasi Aplikasi HP (PWA) */}
+      <PWAInstallButton
+        variant="card"
+        isMobilePreview={isMobilePreview}
+        onToggleMobilePreview={onToggleMobilePreview}
+      />
 
       {/* Profil Pengguna */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">

@@ -22,12 +22,14 @@ interface BottomNavigationProps {
   activeTab: TabType;
   onSelectTab: (tab: TabType) => void;
   onOpenNewTransaction: () => void;
+  forceMobile?: boolean;
 }
 
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   activeTab,
   onSelectTab,
   onOpenNewTransaction,
+  forceMobile = false,
 }) => {
   const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
 
@@ -43,16 +45,18 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
     setShowMoreMenu(false);
   };
 
+  const visibilityClass = forceMobile ? '' : 'md:hidden';
+
   return (
     <>
       {/* Mobile Floating Action Button (FAB) */}
-      <div className="md:hidden fixed bottom-20 right-4 z-40">
+      <div className={`${visibilityClass} fixed bottom-20 right-4 z-40`}>
         <button
           id="btn-mobile-fab-add"
           type="button"
           onClick={onOpenNewTransaction}
           title="Tambah Transaksi Baru"
-          className="w-13 h-13 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-all cursor-pointer"
+          className="w-13 h-13 rounded-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center transition-transform cursor-pointer"
         >
           <Plus className="w-6 h-6 stroke-[2.5]" />
         </button>
@@ -61,21 +65,24 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       {/* More Menu Drawer Backdrop */}
       {showMoreMenu && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden"
+          className={`fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 ${visibilityClass}`}
           onClick={() => setShowMoreMenu(false)}
         >
           <div
-            className="absolute bottom-16 left-0 right-0 bg-white rounded-t-3xl p-5 shadow-2xl border-t border-slate-200 animate-in slide-in-from-bottom duration-200 max-h-[80vh] overflow-y-auto"
+            className="absolute bottom-16 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl px-5 pt-3 pb-6 shadow-2xl border-t border-slate-200 animate-in slide-in-from-bottom duration-200 max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Bottom Sheet Drag Handle */}
+            <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto mb-3" />
+
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              <span className="text-xs font-bold text-slate-600">
                 Menu Lengkap & Perencanaan
               </span>
               <button
                 type="button"
                 onClick={() => setShowMoreMenu(false)}
-                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -177,20 +184,20 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
       {/* Bottom Bar Navigation */}
       <nav
         id="mobile-bottom-nav"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-1 py-1.5 flex items-center justify-around shadow-sm"
+        className={`${visibilityClass} fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-1 pt-1.5 pb-safe flex items-center justify-around shadow-sm`}
       >
         {/* 1. Home */}
         <button
           id="bottom-nav-dashboard"
           type="button"
           onClick={() => handleSelect('dashboard')}
-          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-h-[48px] min-w-[56px] py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
             activeTab === 'dashboard'
               ? 'text-emerald-600 font-semibold'
               : 'text-slate-500 hover:text-slate-900'
           }`}
         >
-          <Home className="w-4.5 h-4.5 mb-0.5" />
+          <Home className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Home</span>
         </button>
 
@@ -199,13 +206,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           id="bottom-nav-recap"
           type="button"
           onClick={() => handleSelect('daily_recap')}
-          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-h-[48px] min-w-[56px] py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
             isRecapActive
               ? 'text-emerald-600 font-semibold'
               : 'text-slate-500 hover:text-slate-900'
           }`}
         >
-          <CalendarDays className="w-4.5 h-4.5 mb-0.5" />
+          <CalendarDays className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Rekap</span>
         </button>
 
@@ -214,13 +221,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           id="bottom-nav-transactions"
           type="button"
           onClick={() => handleSelect('transactions')}
-          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-h-[48px] min-w-[56px] py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
             activeTab === 'transactions'
               ? 'text-emerald-600 font-semibold'
               : 'text-slate-500 hover:text-slate-900'
           }`}
         >
-          <Receipt className="w-4.5 h-4.5 mb-0.5" />
+          <Receipt className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Transaksi</span>
         </button>
 
@@ -229,13 +236,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           id="bottom-nav-reports"
           type="button"
           onClick={() => handleSelect('reports')}
-          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-h-[48px] min-w-[56px] py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
             activeTab === 'reports'
               ? 'text-emerald-600 font-semibold'
               : 'text-slate-500 hover:text-slate-900'
           }`}
         >
-          <FileText className="w-4.5 h-4.5 mb-0.5" />
+          <FileText className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Laporan</span>
         </button>
 
@@ -244,13 +251,13 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           id="bottom-nav-more"
           type="button"
           onClick={() => setShowMoreMenu(!showMoreMenu)}
-          className={`flex flex-col items-center py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
+          className={`flex flex-col items-center justify-center min-h-[48px] min-w-[56px] py-1 px-2.5 rounded-xl transition-colors cursor-pointer ${
             ['budgets', 'savings', 'debts', 'recurring', 'accounts', 'categories', 'backup_restore', 'settings'].includes(activeTab) || showMoreMenu
               ? 'text-emerald-600 font-semibold'
               : 'text-slate-500 hover:text-slate-900'
           }`}
         >
-          <Menu className="w-4.5 h-4.5 mb-0.5" />
+          <Menu className="w-5 h-5 mb-0.5" />
           <span className="text-[10px]">Menu</span>
         </button>
       </nav>
