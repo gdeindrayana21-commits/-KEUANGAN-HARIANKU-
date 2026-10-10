@@ -76,19 +76,9 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
   const [alertError, setAlertError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  // Separate Cash vs Bank accounts clearly
+  // Separate Cash vs Bank accounts clearly — never combine balances across accounts
   const cashAccounts = accounts.filter((a) => a.type === 'Cash');
   const bankAccounts = accounts.filter((a) => a.type !== 'Cash');
-
-  const totalCashBalance = cashAccounts
-    .filter((a) => a.isActive)
-    .reduce((sum, a) => sum + a.currentBalance, 0);
-
-  const totalBankBalance = bankAccounts
-    .filter((a) => a.isActive)
-    .reduce((sum, a) => sum + a.currentBalance, 0);
-
-  const totalActiveBalance = totalCashBalance + totalBankBalance;
 
   const handleOpenCreate = (preferredType: AccountType = 'Cash') => {
     setEditingAccount(null);
@@ -147,7 +137,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
     setSuccessMessage('');
     try {
       await onRecalculateAll();
-      setSuccessMessage('Seluruh saldo Akun Cash dan Rekening Bank berhasil disinkronkan.');
+      setSuccessMessage('Seluruh saldo masing-masing Akun Cash dan Rekening Bank berhasil disinkronkan.');
     } catch {
       setAlertError('Gagal melakukan sinkronisasi saldo.');
     } finally {
@@ -212,7 +202,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
                       isBank ? 'text-blue-700' : 'text-emerald-700'
                     }`}
                   >
-                    {isBank ? 'Rekening Bank' : 'Akun Cash (Tunai)'}
+                    {isBank ? 'Rekening Bank (Terpisah)' : 'Akun Cash (Tunai)'}
                   </span>
                   <span>·</span>
                   <span>{acc.isActive ? 'Aktif' : 'Nonaktif'}</span>
@@ -224,7 +214,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
             </div>
           </div>
 
-          {/* Saldo Saat Ini */}
+          {/* Saldo Saat Ini Masing-Masing Akun */}
           <div
             className={`my-3 p-3.5 rounded-xl border ${
               isBank
@@ -233,7 +223,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
             }`}
           >
             <span className="text-[11px] font-medium text-slate-500 block">
-              {isBank ? 'Saldo Rekening Bank Saat Ini' : 'Saldo Uang Tunai (Cash) Saat Ini'}
+              Saldo {acc.name} Saat Ini (Tidak Digabung)
             </span>
             <div
               className={`text-2xl font-bold tracking-tight tabular-nums mt-0.5 ${
@@ -251,8 +241,8 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
           {/* Info Behavior */}
           <p className="text-[11px] text-slate-500 leading-relaxed mb-3">
             {isBank
-              ? 'Saldo otomatis berkurang saat ada pengeluaran Bank. Klik tombol di bawah setiap ada dana masuk, gaji, atau transferan.'
-              : 'Menampung seluruh pemasukan tunai & hanya berkurang saat ada pengeluaran Cash (tidak mengurangi saldo Bank).'}
+              ? `Saldo ${acc.name} berdiri sendiri (tidak digabung dengan bank lain maupun Cash). Otomatis berkurang saat ada pengeluaran dari bank ini.`
+              : `Saldo ${acc.name} terpisah dari Rekening Bank. Menampung pemasukan tunai & hanya berkurang saat ada pengeluaran Cash.`}
           </p>
 
           {acc.description && (
@@ -313,7 +303,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header & Ringkasan Terpisah: Saldo Cash vs Saldo Bank */}
+      {/* Header & Ringkasan Saldo Per Masing-Masing Akun (Tidak Digabung) */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-5">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center space-x-3">
@@ -325,7 +315,7 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
                 Manajemen Akun Cash & Rekening Bank
               </h2>
               <p className="text-xs text-slate-500">
-                Saldo Akun Cash dan Akun Bank terpisah otomatis sesuai transaksi masing-masing.
+                Saldo setiap Rekening Bank dan Akun Cash berdiri sendiri-sendiri (tidak digabungkan).
               </p>
             </div>
           </div>
@@ -363,47 +353,55 @@ export const AccountsPage: React.FC<AccountsPageProps> = ({
           </div>
         </div>
 
-        {/* 3 Comparison Summary Boxes: Cash, Bank, Total */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-2 border-t border-slate-100">
-          <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80">
-            <div className="flex items-center space-x-2 text-emerald-800 text-xs font-bold">
-              <Banknote className="w-4 h-4 text-emerald-600" />
-              <span>Total Saldo Akun Cash (Tunai)</span>
+        {/* Rincian Saldo Masing-Masing Akun (Tanpa Penggabungan Saldo) */}
+        {accounts.length > 0 && (
+          <div className="pt-3 border-t border-slate-100 space-y-2.5">
+            <div className="text-xs font-bold text-slate-600">
+              Daftar Saldo Masing-Masing Akun (Terpisah & Tidak Digabung):
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              {formatRupiah(totalCashBalance)}
-            </div>
-            <p className="text-[11px] text-emerald-700 mt-1">
-              Bertambah saat ada pemasukan & berkurang saat pengeluaran tunai
-            </p>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {cashAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center space-x-1.5 text-emerald-800 text-xs font-bold truncate">
+                      <Banknote className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="truncate">{acc.name}</span>
+                    </div>
+                    <div className="text-lg font-bold text-slate-900 mt-1 tabular-nums">
+                      {formatRupiah(acc.currentBalance)}
+                    </div>
+                    <span className="text-[11px] text-emerald-700">
+                      Akun Cash · Saldo Terpisah
+                    </span>
+                  </div>
+                </div>
+              ))}
 
-          <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-200/80">
-            <div className="flex items-center space-x-2 text-blue-800 text-xs font-bold">
-              <Landmark className="w-4 h-4 text-blue-600" />
-              <span>Total Saldo Rekening Bank</span>
+              {bankAccounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center space-x-1.5 text-blue-800 text-xs font-bold truncate">
+                      <Landmark className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="truncate">{acc.name}</span>
+                    </div>
+                    <div className="text-lg font-bold text-slate-900 mt-1 tabular-nums">
+                      {formatRupiah(acc.currentBalance)}
+                    </div>
+                    <span className="text-[11px] text-blue-700">
+                      Rekening Bank · Saldo Terpisah
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              {formatRupiah(totalBankBalance)}
-            </div>
-            <p className="text-[11px] text-blue-700 mt-1">
-              Berkurang saat transaksi Bank & bisa diedit saat ada gaji/transfer
-            </p>
           </div>
-
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-            <div className="flex items-center space-x-2 text-slate-700 text-xs font-bold">
-              <Wallet className="w-4 h-4 text-slate-500" />
-              <span>Total Gabungan (Cash + Bank)</span>
-            </div>
-            <div className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-              {formatRupiah(totalActiveBalance)}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1">
-              {cashAccounts.length} Akun Cash · {bankAccounts.length} Rekening Bank
-            </p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Notifications */}

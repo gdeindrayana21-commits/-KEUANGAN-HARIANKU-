@@ -415,51 +415,51 @@ export function calculateBalanceProgress(
   customStart?: string,
   customEnd?: string
 ): BalanceProgressChartItem[] {
-  // 1. Initial base = sum of initial balances
-  const baseInitial = accounts
-    .filter((a) => a.isActive)
-    .reduce((sum, a) => sum + Math.round(Number(a.initialBalance) || 0), 0);
+  const activeAccounts = accounts.filter((a) => a.isActive);
+  // Only calculate for the first active account if multiple are passed, or the single passed account,
+  // so balances of different accounts are never combined.
+  const targetAccount = activeAccounts[0] || accounts[0];
+  if (!targetAccount) return [];
 
-  // 2. Sort all transactions chronologically
-  const sortedTxs = [...transactions].sort((a, b) => {
+  const targetAccountId = targetAccount.id;
+  const baseInitial = Math.round(Number(targetAccount.initialBalance) || 0);
+
+  // Filter transactions belonging to this specific account only
+  const accountTxs = transactions.filter(
+    (tx) => tx.accountId === targetAccountId || tx.toAccountId === targetAccountId
+  );
+
+  // Normalize transactions into inflow/outflow for this specific account
+  const normalizedAccountTxs: Transaction[] = accountTxs.map((tx) => {
+    if (tx.type === 'transfer') {
+      const isIncoming = tx.toAccountId === targetAccountId;
+      return {
+        ...tx,
+        type: isIncoming ? 'income' : 'expense',
+      };
+    }
+    return tx;
+  });
+
+  // Sort chronologically
+  const sortedTxs = [...normalizedAccountTxs].sort((a, b) => {
     const cmp = a.date.localeCompare(b.date);
     if (cmp !== 0) return cmp;
     return (a.time || '').localeCompare(b.time || '');
   });
 
-  // 3. Map cumulative running balance by date
-  let runningBalance = baseInitial;
-  const balanceAtEndOfDate = new Map<string, { balance: number; income: number; expense: number }>();
-
-  for (const tx of sortedTxs) {
-    const amt = Math.round(Number(tx.amount) || 0);
-    const dateKey = tx.date;
-    const currentRecord = balanceAtEndOfDate.get(dateKey) || {
-      balance: runningBalance,
-      income: 0,
-      expense: 0,
-    };
-
-    if (tx.type === 'income') {
-      runningBalance += amt;
-      currentRecord.income += amt;
-    } else {
-      runningBalance -= amt;
-      currentRecord.expense += amt;
-    }
-    currentRecord.balance = runningBalance;
-    balanceAtEndOfDate.set(dateKey, currentRecord);
-  }
-
-  // 4. Determine timeline dates for selected period
-  const cashFlow = calculateCashFlowChartData(transactions, period, customStart, customEnd);
+  // Determine timeline dates for selected period for this account
+  const cashFlow = calculateCashFlowChartData(
+    normalizedAccountTxs,
+    period,
+    customStart,
+    customEnd
+  );
   if (cashFlow.length === 0) return [];
 
-  // Build points matching the period intervals
   let prevKnownBalance = baseInitial;
   const progressItems: BalanceProgressChartItem[] = [];
 
-  // If filtered by period, find start balance before period
   let periodStartDate = '';
   if (period === 'today') {
     periodStartDate = getTodayString();
@@ -471,14 +471,17 @@ export function calculateBalanceProgress(
   } else if (period === 'last_month') {
     const now = new Date();
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    periodStartDate = getStartOfMonth(lastMonthDate.getFullYear(), lastMonthDate.getMonth());
+    periodStartDate = getStartOfMonth(
+      lastMonthDate.getFullYear(),
+      lastMonthDate.getMonth()
+    );
   } else if (period === 'this_year') {
     periodStartDate = getStartOfYear(new Date().getFullYear());
   } else if (period === 'custom' && customStart) {
     periodStartDate = customStart;
   }
 
-  // Compute balance right before period start
+  // Compute balance of this specific account right before period start
   if (periodStartDate) {
     let preBalance = baseInitial;
     for (const tx of sortedTxs) {
@@ -493,7 +496,6 @@ export function calculateBalanceProgress(
     prevKnownBalance = preBalance;
   }
 
-  // Generate chart items using the cash flow points
   let currentAccumulated = prevKnownBalance;
   for (const item of cashFlow) {
     currentAccumulated += item.income - item.expense;
