@@ -185,6 +185,16 @@
           "maxLength": 300,
           "description": "Catatan atau keterangan transaksi"
         },
+        "receiptImageUrl": {
+          "type": "string",
+          "maxLength": 350000,
+          "description": "Foto struk atau bukti pembelanjaan terkompresi dalam format Data URL"
+        },
+        "receiptFileName": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Nama file foto struk pembelanjaan"
+        },
         "createdAt": {
           "type": "string",
           "description": "Timestamp pembuatan transaksi"

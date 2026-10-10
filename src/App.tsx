@@ -1,11 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './services/firebase';
-import { syncUserProfile, logoutUser } from './services/authService';
+import {
+  syncUserProfile,
+  logoutUser,
+  subscribeAuthState,
+  AppAuthUser,
+} from './services/authService';
 import {
   subscribeAccounts,
+  seedDefaultAccountsIfEmpty,
   createAccount,
   updateAccount,
+  adjustAccountCurrentBalance,
   toggleAccountActive,
   deleteAccount,
   recalculateAllAccounts,
@@ -103,7 +108,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<AppAuthUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isMobilePreview, setIsMobilePreview] = useState<boolean>(false);
@@ -137,18 +142,19 @@ export default function App() {
     }, 4000);
   }, []);
 
-  // 1. Auth Listener
+  // 1. Auth Listener (Firebase Auth + Seamless Cloud Firestore Fallback Session)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = subscribeAuthState(async (user) => {
       setCurrentUser(user);
       if (user) {
         try {
           const profile = await syncUserProfile(user);
           setUserProfile(profile);
-          // Seed default categories if this user is new
+          // Seed default categories and default Cash + Bank accounts if this user is new
           await seedDefaultCategoriesIfEmpty(user.uid);
+          await seedDefaultAccountsIfEmpty(user.uid);
         } catch (err) {
-          console.error('Error initializing user profile or categories:', err);
+          console.warn('Error initializing user profile, categories, or accounts:', err);
         }
       } else {
         setUserProfile(null);
@@ -175,49 +181,49 @@ export default function App() {
     const unsubAccounts = subscribeAccounts(
       userId,
       (accs) => setAccounts(accs),
-      (err) => console.error('Accounts subscription error:', err)
+      (err) => console.warn('Accounts subscription error:', err)
     );
 
     const unsubCategories = subscribeCategories(
       userId,
       (cats) => setCategories(cats),
-      (err) => console.error('Categories subscription error:', err)
+      (err) => console.warn('Categories subscription error:', err)
     );
 
     const unsubTransactions = subscribeTransactions(
       userId,
       (txs) => setTransactions(txs),
-      (err) => console.error('Transactions subscription error:', err)
+      (err) => console.warn('Transactions subscription error:', err)
     );
 
     const unsubBudgets = subscribeBudgets(
       userId,
       (b) => setBudgets(b),
-      (err) => console.error('Budgets subscription error:', err)
+      (err) => console.warn('Budgets subscription error:', err)
     );
 
     const unsubSavings = subscribeSavingsGoals(
       userId,
       (s) => setSavingsGoals(s),
-      (err) => console.error('Savings subscription error:', err)
+      (err) => console.warn('Savings subscription error:', err)
     );
 
     const unsubDebts = subscribeDebts(
       userId,
       (d) => setDebts(d),
-      (err) => console.error('Debts subscription error:', err)
+      (err) => console.warn('Debts subscription error:', err)
     );
 
     const unsubReceivables = subscribeReceivables(
       userId,
       (r) => setReceivables(r),
-      (err) => console.error('Receivables subscription error:', err)
+      (err) => console.warn('Receivables subscription error:', err)
     );
 
     const unsubRecurring = subscribeRecurringTransactions(
       userId,
       (rec) => setRecurringTransactions(rec),
-      (err) => console.error('Recurring subscription error:', err)
+      (err) => console.warn('Recurring subscription error:', err)
     );
 
     return () => {
@@ -255,6 +261,8 @@ export default function App() {
     date: string;
     time: string;
     description: string;
+    receiptImageUrl?: string;
+    receiptFileName?: string;
   }) => {
     if (!currentUser) return;
 
@@ -309,12 +317,47 @@ export default function App() {
       name: string;
       type: AccountType;
       initialBalance: number;
+      targetCurrentBalance?: number;
       description: string;
     }
   ) => {
     if (!currentUser) return;
     await updateAccount(currentUser.uid, accountId, data);
-    showToast('Akun keuangan berhasil diperbarui.');
+    showToast('Akun keuangan & saldo berhasil diperbarui.');
+  };
+
+  const handleRecordBankIncome = async (data: {
+    accountId: string;
+    accountName: string;
+    amount: number;
+    sourceLabel: string;
+    date: string;
+    description: string;
+  }) => {
+    if (!currentUser) return;
+    const incomeCategory = categories.find((c) => c.type === 'income' && c.isActive);
+    await createTransaction(currentUser.uid, {
+      type: 'income',
+      amount: data.amount,
+      categoryId: incomeCategory?.id || 'bank_income',
+      categoryName: data.sourceLabel || incomeCategory?.name || 'Dana Masuk Bank',
+      accountId: data.accountId,
+      accountName: data.accountName,
+      date: data.date,
+      time: new Date().toTimeString().slice(0, 5),
+      description: data.description,
+    });
+    showToast(`Dana masuk (${data.sourceLabel}) berhasil ditambahkan ke ${data.accountName}.`);
+  };
+
+  const handleDirectAdjustBalance = async (
+    accountId: string,
+    newCurrentBalance: number,
+    note: string
+  ) => {
+    if (!currentUser) return;
+    await adjustAccountCurrentBalance(currentUser.uid, accountId, newCurrentBalance, note);
+    showToast('Saldo rekening bank berhasil diperbarui.');
   };
 
   const handleToggleAccountActive = async (accountId: string, isActive: boolean) => {
@@ -325,7 +368,7 @@ export default function App() {
 
   const handleDeleteAccount = async (accountId: string) => {
     if (!currentUser) return;
-    await deleteAccount(currentUser.uid, accountId);
+    await deleteAccount(currentUser.uid, accountId, true);
     showToast('Akun keuangan berhasil dihapus.');
   };
 
@@ -703,6 +746,9 @@ export default function App() {
                   onEditTransaction={handleOpenEditTransaction}
                   onDeleteTransaction={handleDeleteTransactionClick}
                   onViewAllTransactions={() => setActiveTab('transactions')}
+                  onManageAccounts={() => setActiveTab('accounts')}
+                  onRecordBankIncome={handleRecordBankIncome}
+                  onDirectAdjustBalance={handleDirectAdjustBalance}
                 />
               </>
             )}
@@ -820,8 +866,11 @@ export default function App() {
             {activeTab === 'accounts' && (
               <AccountsPage
                 accounts={accounts}
+                transactions={transactions}
                 onCreateAccount={handleCreateAccount}
                 onUpdateAccount={handleUpdateAccount}
+                onRecordBankIncome={handleRecordBankIncome}
+                onDirectAdjustBalance={handleDirectAdjustBalance}
                 onToggleAccountActive={handleToggleAccountActive}
                 onDeleteAccount={handleDeleteAccount}
                 onRecalculateAll={handleRecalculateAll}

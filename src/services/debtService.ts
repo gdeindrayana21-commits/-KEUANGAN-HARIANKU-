@@ -4,10 +4,15 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  getDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDoc,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import { Debt, DebtPayment } from '../types';
 
 export function subscribeDebts(
@@ -27,7 +32,6 @@ export function subscribeDebts(
         ...(d.data() as Omit<Debt, 'id'>),
       }));
 
-      // Sort: unpaid / partially_paid first, then by dueDate
       items.sort((a, b) => {
         if (a.status === 'paid' && b.status !== 'paid') return 1;
         if (a.status !== 'paid' && b.status === 'paid') return -1;
@@ -78,24 +82,30 @@ export async function createDebt(
       dueDate: data.dueDate,
       status,
       notes: data.notes?.trim() || '',
-      payments: paid > 0 ? [{
-        id: 'init-pay',
-        amount: paid,
-        date: data.dueDate,
-        note: 'Pembayaran awal saat pencatatan',
-        createdAt: now,
-      }] : [],
+      payments:
+        paid > 0
+          ? [
+              {
+                id: 'init-pay',
+                amount: paid,
+                date: data.dueDate,
+                note: 'Pembayaran awal saat pencatatan',
+                createdAt: now,
+              },
+            ]
+          : [],
       createdAt: now,
       updatedAt: now,
     };
 
-    await setDoc(docRef, newDebt);
+    await safeWrite(setDoc(docRef, newDebt));
     return docRef.id;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal hutang')) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -112,8 +122,8 @@ export async function updateDebt(
   const path = `users/${userId}/debts/${debtId}`;
   try {
     const docRef = doc(db, 'users', userId, 'debts', debtId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
 
     const existing = snap.data() as Debt;
     const now = new Date().toISOString();
@@ -127,14 +137,16 @@ export async function updateDebt(
     const status: Debt['status'] =
       paid >= total ? 'paid' : paid > 0 ? 'partially_paid' : 'unpaid';
 
-    await updateDoc(docRef, {
-      personName: data.personName.trim(),
-      totalAmount: total,
-      dueDate: data.dueDate,
-      status,
-      notes: data.notes?.trim() || '',
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        personName: data.personName.trim(),
+        totalAmount: total,
+        dueDate: data.dueDate,
+        status,
+        notes: data.notes?.trim() || '',
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal hutang')) {
       throw error;
@@ -157,8 +169,8 @@ export async function addDebtPayment(
   const path = `users/${userId}/debts/${debtId}`;
   try {
     const docRef = doc(db, 'users', userId, 'debts', debtId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
 
     const debt = snap.data() as Debt;
     const now = new Date().toISOString();
@@ -182,14 +194,20 @@ export async function addDebtPayment(
     const updatedPayments = [...currentPayments, newPayment];
     const newPaidAmount = updatedPayments.reduce((s, p) => s + (p.amount || 0), 0);
     const newStatus: Debt['status'] =
-      newPaidAmount >= debt.totalAmount ? 'paid' : newPaidAmount > 0 ? 'partially_paid' : 'unpaid';
+      newPaidAmount >= debt.totalAmount
+        ? 'paid'
+        : newPaidAmount > 0
+        ? 'partially_paid'
+        : 'unpaid';
 
-    await updateDoc(docRef, {
-      payments: updatedPayments,
-      paidAmount: newPaidAmount,
-      status: newStatus,
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        payments: updatedPayments,
+        paidAmount: newPaidAmount,
+        status: newStatus,
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal pembayaran')) {
       throw error;
@@ -202,7 +220,7 @@ export async function deleteDebt(userId: string, debtId: string): Promise<void> 
   const path = `users/${userId}/debts/${debtId}`;
   try {
     const docRef = doc(db, 'users', userId, 'debts', debtId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

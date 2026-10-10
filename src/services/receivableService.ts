@@ -4,10 +4,15 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  getDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDoc,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import { Receivable, DebtPayment } from '../types';
 
 export function subscribeReceivables(
@@ -27,7 +32,6 @@ export function subscribeReceivables(
         ...(d.data() as Omit<Receivable, 'id'>),
       }));
 
-      // Sort: unpaid / partially_paid first, then by dueDate
       items.sort((a, b) => {
         if (a.status === 'paid' && b.status !== 'paid') return 1;
         if (a.status !== 'paid' && b.status === 'paid') return -1;
@@ -78,24 +82,30 @@ export async function createReceivable(
       dueDate: data.dueDate,
       status,
       notes: data.notes?.trim() || '',
-      payments: received > 0 ? [{
-        id: 'init-rcv',
-        amount: received,
-        date: data.dueDate,
-        note: 'Penerimaan awal saat pencatatan',
-        createdAt: now,
-      }] : [],
+      payments:
+        received > 0
+          ? [
+              {
+                id: 'init-rcv',
+                amount: received,
+                date: data.dueDate,
+                note: 'Penerimaan awal saat pencatatan',
+                createdAt: now,
+              },
+            ]
+          : [],
       createdAt: now,
       updatedAt: now,
     };
 
-    await setDoc(docRef, newRec);
+    await safeWrite(setDoc(docRef, newRec));
     return docRef.id;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal piutang')) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -112,8 +122,8 @@ export async function updateReceivable(
   const path = `users/${userId}/receivables/${receivableId}`;
   try {
     const docRef = doc(db, 'users', userId, 'receivables', receivableId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
 
     const existing = snap.data() as Receivable;
     const now = new Date().toISOString();
@@ -127,14 +137,16 @@ export async function updateReceivable(
     const status: Receivable['status'] =
       received >= total ? 'paid' : received > 0 ? 'partially_paid' : 'unpaid';
 
-    await updateDoc(docRef, {
-      personName: data.personName.trim(),
-      totalAmount: total,
-      dueDate: data.dueDate,
-      status,
-      notes: data.notes?.trim() || '',
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        personName: data.personName.trim(),
+        totalAmount: total,
+        dueDate: data.dueDate,
+        status,
+        notes: data.notes?.trim() || '',
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal piutang')) {
       throw error;
@@ -157,8 +169,8 @@ export async function addReceivablePayment(
   const path = `users/${userId}/receivables/${receivableId}`;
   try {
     const docRef = doc(db, 'users', userId, 'receivables', receivableId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
 
     const rec = snap.data() as Receivable;
     const now = new Date().toISOString();
@@ -182,14 +194,20 @@ export async function addReceivablePayment(
     const updatedPayments = [...currentPayments, newPayment];
     const newReceivedAmount = updatedPayments.reduce((s, p) => s + (p.amount || 0), 0);
     const newStatus: Receivable['status'] =
-      newReceivedAmount >= rec.totalAmount ? 'paid' : newReceivedAmount > 0 ? 'partially_paid' : 'unpaid';
+      newReceivedAmount >= rec.totalAmount
+        ? 'paid'
+        : newReceivedAmount > 0
+        ? 'partially_paid'
+        : 'unpaid';
 
-    await updateDoc(docRef, {
-      payments: updatedPayments,
-      receivedAmount: newReceivedAmount,
-      status: newStatus,
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        payments: updatedPayments,
+        receivedAmount: newReceivedAmount,
+        status: newStatus,
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal penerimaan')) {
       throw error;
@@ -202,7 +220,7 @@ export async function deleteReceivable(userId: string, receivableId: string): Pr
   const path = `users/${userId}/receivables/${receivableId}`;
   try {
     const docRef = doc(db, 'users', userId, 'receivables', receivableId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

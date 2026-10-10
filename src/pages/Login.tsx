@@ -8,12 +8,7 @@ import {
   AlertCircle,
   ArrowRight,
   ShieldCheck,
-  ChevronDown,
-  ChevronUp,
   Sparkles,
-  Info,
-  ExternalLink,
-  CheckCircle2,
 } from 'lucide-react';
 import {
   loginWithEmail,
@@ -28,7 +23,6 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
-  const [showEmailSection, setShowEmailSection] = useState<boolean>(false);
   const [isRegisterMode, setIsRegisterMode] = useState<boolean>(false);
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -37,17 +31,14 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [isOperationNotAllowed, setIsOperationNotAllowed] = useState<boolean>(false);
 
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setErrorMessage('');
-    setIsOperationNotAllowed(false);
     try {
       await loginWithGoogle();
       onSuccess();
     } catch (err) {
-      console.error('Google auth error:', err);
       const msg = getIndonesianAuthErrorMessage(err);
       setErrorMessage(msg);
     } finally {
@@ -69,7 +60,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
 
     setIsLoading(true);
     setErrorMessage('');
-    setIsOperationNotAllowed(false);
 
     try {
       if (isRegisterMode) {
@@ -79,11 +69,6 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
       }
       onSuccess();
     } catch (err) {
-      console.error('Email auth error:', err);
-      const errStr = err instanceof Error ? err.message : '';
-      if (errStr.includes('auth/operation-not-allowed')) {
-        setIsOperationNotAllowed(true);
-      }
       setErrorMessage(getIndonesianAuthErrorMessage(err));
     } finally {
       setIsLoading(false);
@@ -122,43 +107,25 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             >
               <div className="flex items-start space-x-2.5">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-600 mt-0.5" />
-                <div className="flex-1 space-y-2">
+                <div className="flex-1">
                   <p className="font-semibold">{errorMessage}</p>
-
-                  {/* Solusi Langsung Masuk dengan Google jika metode email belum aktif */}
-                  {isOperationNotAllowed && (
-                    <div className="mt-3 pt-3 border-t border-rose-200/70">
-                      <p className="text-xs text-rose-700 mb-2">
-                        Penyedia otentikasi proyek Firebase ini telah mengaktifkan <strong>Google Sign-In</strong> secara default. Klik tombol di bawah untuk masuk langsung:
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleGoogleLogin}
-                        disabled={isGoogleLoading}
-                        className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors shadow-xs cursor-pointer"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        <span>Masuk dengan Google Sekarang</span>
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* OPSI UTAMA: MASUK DENGAN GOOGLE */}
+          {/* OPSI 1: MASUK DENGAN GOOGLE */}
           <div className="space-y-4">
             <div className="text-center">
-              <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200/60 mb-2">
+              <span className="inline-flex items-center space-x-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-lg border border-emerald-200/60 mb-2">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Masuk Resmi & Instan</span>
+                <span>Akses Cepat & Aman</span>
               </span>
               <h2 className="text-base font-bold text-slate-800">
                 Masuk ke Akun Pembukuan Anda
               </h2>
               <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                Akses seluruh catatan kas, rekening, anggaran, dan tabungan Anda secara aman.
+                Kelola Akun Cash, Rekening Bank, dan Struk Pembelanjaan harian Anda.
               </p>
             </div>
 
@@ -173,7 +140,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
               {isGoogleLoading ? (
                 <div className="flex items-center space-x-2 text-slate-600">
                   <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                  <span>Menghubungkan ke Google...</span>
+                  <span>Menghubungkan ke Akun...</span>
                 </div>
               ) : (
                 <>
@@ -203,191 +170,152 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
             </button>
           </div>
 
-          {/* OPSI ALTERNATIF: EMAIL & PASSWORD (COLLAPSIBLE / ACCORDION) */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => {
-                setShowEmailSection(!showEmailSection);
-                setErrorMessage('');
-                setIsOperationNotAllowed(false);
-              }}
-              className="w-full flex items-center justify-between py-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
-            >
-              <span>Opsi lain: Masuk dengan Email & Kata Sandi</span>
-              {showEmailSection ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
+          {/* PEMBATAS */}
+          <div className="my-6 flex items-center">
+            <div className="flex-1 border-t border-slate-200" />
+            <span className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Atau dengan Email
+            </span>
+            <div className="flex-1 border-t border-slate-200" />
+          </div>
+
+          {/* OPSI 2: EMAIL & KATA SANDI (LANGSUNG AKTIF) */}
+          <div className="space-y-4">
+            {/* Tabs Mode */}
+            <div className="flex border-b border-slate-100">
+              <button
+                id="tab-login"
+                type="button"
+                onClick={() => {
+                  setIsRegisterMode(false);
+                  setErrorMessage('');
+                }}
+                className={`flex-1 pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                  !isRegisterMode
+                    ? 'border-emerald-600 text-emerald-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Masuk (Email)
+              </button>
+              <button
+                id="tab-register"
+                type="button"
+                onClick={() => {
+                  setIsRegisterMode(true);
+                  setErrorMessage('');
+                }}
+                className={`flex-1 pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                  isRegisterMode
+                    ? 'border-emerald-600 text-emerald-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Daftar Akun Baru
+              </button>
+            </div>
+
+            <form onSubmit={handleEmailSubmit} className="space-y-3.5">
+              {/* Name Input (Register mode only) */}
+              {isRegisterMode && (
+                <div>
+                  <label
+                    htmlFor="input-login-name"
+                    className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
+                  >
+                    Nama Lengkap
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="input-login-name"
+                      type="text"
+                      required
+                      placeholder="Nama Anda"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      disabled={isLoading || isGoogleLoading}
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                    <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
               )}
-            </button>
 
-            {showEmailSection && (
-              <div className="mt-4 space-y-4 pt-2">
-                {/* Info & Panduan Aktivasi Firebase Console */}
-                <div className="p-3.5 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-900 space-y-2.5">
-                  <div className="flex items-start space-x-2">
-                    <Info className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-amber-900 text-xs">
-                        Panduan Aktivasi Email/Password di Firebase:
-                      </p>
-                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                        Jika ingin mendaftar & masuk dengan email manual, aktifkan fiturnya di Firebase Console:
-                      </p>
-                    </div>
-                  </div>
-
-                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-900/90 pl-1 font-medium">
-                    <li>Buka menu <strong>Authentication</strong> &rarr; tab <strong>Sign-in method</strong>.</li>
-                    <li>Klik baris <strong>Email/Password</strong>.</li>
-                    <li>Nyalakan toggle <strong>Enable</strong> pertama, lalu klik <strong>Save</strong>.</li>
-                  </ol>
-
-                  <div className="pt-1 flex flex-col sm:flex-row gap-2">
-                    <a
-                      href="https://console.firebase.google.com/project/gen-lang-client-0979887913/authentication/providers"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors"
-                    >
-                      <span>Buka Firebase Console Proyek</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-
-                {/* Tabs Mode */}
-                <div className="flex border-b border-slate-100">
-                  <button
-                    id="tab-login"
-                    type="button"
-                    onClick={() => {
-                      setIsRegisterMode(false);
-                      setErrorMessage('');
-                    }}
-                    className={`flex-1 pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-                      !isRegisterMode
-                        ? 'border-emerald-600 text-emerald-600'
-                        : 'border-transparent text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    Masuk (Email)
-                  </button>
-                  <button
-                    id="tab-register"
-                    type="button"
-                    onClick={() => {
-                      setIsRegisterMode(true);
-                      setErrorMessage('');
-                    }}
-                    className={`flex-1 pb-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-                      isRegisterMode
-                        ? 'border-emerald-600 text-emerald-600'
-                        : 'border-transparent text-slate-400 hover:text-slate-600'
-                    }`}
-                  >
-                    Daftar (Email)
-                  </button>
-                </div>
-
-                <form onSubmit={handleEmailSubmit} className="space-y-3.5">
-                  {/* Name Input (Register mode only) */}
-                  {isRegisterMode && (
-                    <div>
-                      <label
-                        htmlFor="input-login-name"
-                        className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
-                      >
-                        Nama Lengkap
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="input-login-name"
-                          type="text"
-                          required
-                          placeholder="Nama Anda"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          disabled={isLoading || isGoogleLoading}
-                          className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                        />
-                        <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Email Input */}
-                  <div>
-                    <label
-                      htmlFor="input-login-email"
-                      className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
-                    >
-                      Alamat Email
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="input-login-email"
-                        type="email"
-                        required
-                        placeholder="nama@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        disabled={isLoading || isGoogleLoading}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                      />
-                      <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  {/* Password Input */}
-                  <div>
-                    <label
-                      htmlFor="input-login-password"
-                      className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
-                    >
-                      Kata Sandi
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="input-login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={isLoading || isGoogleLoading}
-                        className="w-full pl-9 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                      />
-                      <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
-                      <button
-                        id="btn-toggle-password"
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        disabled={isLoading || isGoogleLoading}
-                        className="absolute right-2.5 top-2 p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-3.5 h-3.5" />
-                        ) : (
-                          <Eye className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    id="btn-login-submit"
-                    type="submit"
+              {/* Email Input */}
+              <div>
+                <label
+                  htmlFor="input-login-email"
+                  className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
+                >
+                  Alamat Email
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-login-email"
+                    type="email"
+                    required
+                    placeholder="nama@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading || isGoogleLoading}
-                    className="w-full flex items-center justify-center space-x-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 active:bg-black text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
-                  >
-                    <span>{isLoading ? 'Memproses...' : isRegisterMode ? 'Daftar Sekarang' : 'Masuk'}</span>
-                    {!isLoading && <ArrowRight className="w-3.5 h-3.5" />}
-                  </button>
-                </form>
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                  />
+                  <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                </div>
               </div>
-            )}
+
+              {/* Password Input */}
+              <div>
+                <label
+                  htmlFor="input-login-password"
+                  className="block text-[11px] font-semibold uppercase text-slate-600 mb-1"
+                >
+                  Kata Sandi
+                </label>
+                <div className="relative">
+                  <input
+                    id="input-login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Minimal 6 karakter"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading || isGoogleLoading}
+                    className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                  />
+                  <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  <button
+                    id="btn-toggle-password"
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading || isGoogleLoading}
+                    className="absolute right-2.5 top-2 p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                id="btn-login-submit"
+                type="submit"
+                disabled={isLoading || isGoogleLoading}
+                className="w-full flex items-center justify-center space-x-1.5 py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
+              >
+                <span>
+                  {isLoading
+                    ? 'Memproses...'
+                    : isRegisterMode
+                    ? 'Daftar & Masuk Sekarang'
+                    : 'Masuk dengan Email'}
+                </span>
+                {!isLoading && <ArrowRight className="w-3.5 h-3.5" />}
+              </button>
+            </form>
           </div>
 
           {/* Install on Mobile Phone Card */}
@@ -396,7 +324,7 @@ export const Login: React.FC<LoginProps> = ({ onSuccess }) => {
           {/* Privacy & Isolation Note */}
           <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center space-x-1.5 text-[11px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Data Multi-User Terisolasi & Aman di Firebase</span>
+            <span>Data Multi-User Terisolasi & Aman di Cloud Firestore</span>
           </div>
         </div>
       </div>

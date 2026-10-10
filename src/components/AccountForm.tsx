@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Wallet, FileText, AlertCircle } from 'lucide-react';
+import { X, Wallet, Landmark, Banknote, FileText, AlertCircle } from 'lucide-react';
 import { Account, AccountType } from '../types';
-import { formatRupiahInputDisplay, parseRupiahInput } from '../utils/currency';
+import { formatRupiah, formatRupiahInputDisplay, parseRupiahInput } from '../utils/currency';
 
 interface AccountFormProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: Account | null;
+  defaultType?: AccountType;
   onSubmit: (data: {
     name: string;
     type: AccountType;
     initialBalance: number;
+    targetCurrentBalance?: number;
     description: string;
   }) => Promise<void>;
 }
@@ -19,11 +21,13 @@ export const AccountForm: React.FC<AccountFormProps> = ({
   isOpen,
   onClose,
   initialData,
+  defaultType = 'Cash',
   onSubmit,
 }) => {
   const [name, setName] = useState<string>('');
   const [type, setType] = useState<AccountType>('Cash');
-  const [initialBalanceRaw, setInitialBalanceRaw] = useState<string>('');
+  const [balanceMode, setBalanceMode] = useState<'current' | 'add_funds' | 'initial'>('current');
+  const [balanceInputRaw, setBalanceInputRaw] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -32,18 +36,34 @@ export const AccountForm: React.FC<AccountFormProps> = ({
     if (initialData) {
       setName(initialData.name);
       setType(initialData.type);
-      setInitialBalanceRaw(String(initialData.initialBalance));
+      setBalanceMode('current');
+      setBalanceInputRaw(String(Math.max(0, initialData.currentBalance)));
       setDescription(initialData.description || '');
     } else {
-      setName('');
-      setType('Cash');
-      setInitialBalanceRaw('0');
+      setName(defaultType === 'Bank' ? '' : '');
+      setType(defaultType);
+      setBalanceMode('initial');
+      setBalanceInputRaw('0');
       setDescription('');
     }
     setErrorMessage('');
-  }, [initialData, isOpen]);
+  }, [initialData, defaultType, isOpen]);
 
   if (!isOpen) return null;
+
+  const isEditMode = !!initialData;
+  const parsedInput = parseRupiahInput(balanceInputRaw);
+
+  const computedTargetCurrentBalance = (): number | undefined => {
+    if (!isEditMode || !initialData) return undefined;
+    if (balanceMode === 'current') {
+      return parsedInput;
+    }
+    if (balanceMode === 'add_funds') {
+      return initialData.currentBalance + parsedInput;
+    }
+    return undefined;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,16 +72,19 @@ export const AccountForm: React.FC<AccountFormProps> = ({
       return;
     }
 
-    const cleanInitial = parseRupiahInput(initialBalanceRaw);
-
     setIsSubmitting(true);
     setErrorMessage('');
 
     try {
+      const targetCurrent = computedTargetCurrentBalance();
       await onSubmit({
         name: name.trim(),
         type,
-        initialBalance: cleanInitial,
+        initialBalance:
+          isEditMode && balanceMode !== 'initial' && initialData
+            ? initialData.initialBalance
+            : parsedInput,
+        ...(typeof targetCurrent === 'number' ? { targetCurrentBalance: targetCurrent } : {}),
         description: description.trim(),
       });
       onClose();
@@ -74,8 +97,6 @@ export const AccountForm: React.FC<AccountFormProps> = ({
     }
   };
 
-  const isEditMode = !!initialData;
-
   return (
     <div
       id="modal-account-backdrop"
@@ -86,35 +107,113 @@ export const AccountForm: React.FC<AccountFormProps> = ({
         className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden my-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
+          <div className="flex items-center space-x-2.5">
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                type === 'Bank'
+                  ? 'bg-blue-50 text-blue-600'
+                  : 'bg-emerald-50 text-emerald-600'
+              }`}
+            >
+              {type === 'Bank' ? (
+                <Landmark className="w-5 h-5" />
+              ) : (
+                <Wallet className="w-5 h-5" />
+              )}
             </div>
-            <h2 className="text-base font-semibold text-slate-900">
-              {isEditMode ? 'EDIT AKUN KEUANGAN' : 'TAMBAH AKUN KEUANGAN'}
-            </h2>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                {isEditMode ? 'EDIT AKUN & SALDO' : 'TAMBAH AKUN KEUANGAN'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {type === 'Bank'
+                  ? 'Rekening Bank (Dana Masuk / Gaji / Transaksi Bank)'
+                  : 'Akun Cash / Tunai (Pemasukan & Pengeluaran Tunai)'}
+              </p>
+            </div>
           </div>
           <button
             id="btn-close-account-modal"
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Jenis Akun: Pilih Cash atau Bank */}
+          <div>
+            <label className="block text-xs font-semibold uppercase text-slate-500 mb-1.5">
+              Kategori Akun Keuangan <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setType('Cash')}
+                disabled={isSubmitting}
+                className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                  type === 'Cash'
+                    ? 'border-emerald-600 bg-emerald-50/70 text-emerald-900'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Banknote
+                    className={`w-4 h-4 ${
+                      type === 'Cash' ? 'text-emerald-600' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="text-xs font-bold">Akun Cash (Tunai)</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                  Menampung pemasukan & pengeluaran tunai tanpa mengurangi Bank.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setType('Bank')}
+                disabled={isSubmitting}
+                className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                  type === 'Bank'
+                    ? 'border-blue-600 bg-blue-50/70 text-blue-900'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Landmark
+                    className={`w-4 h-4 ${
+                      type === 'Bank' ? 'text-blue-600' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="text-xs font-bold">Rekening Bank</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                  Bisa diedit saat ada gaji/transfer masuk & otomatis berkurang saat transaksi.
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* Nama Akun */}
           <div>
-            <label htmlFor="input-acc-name" className="block text-xs font-semibold uppercase text-slate-500 mb-1.5">
+            <label
+              htmlFor="input-acc-name"
+              className="block text-xs font-semibold uppercase text-slate-500 mb-1.5"
+            >
               Nama Akun <span className="text-rose-500">*</span>
             </label>
             <input
               id="input-acc-name"
               type="text"
-              placeholder="Contoh: Dompet Utama, Bank BCA, DANA"
+              placeholder={
+                type === 'Bank'
+                  ? 'Contoh: Bank BCA, Bank Mandiri, BRI Gaji'
+                  : 'Contoh: Dompet Cash (Tunai), Kas Harian'
+              }
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isSubmitting}
@@ -123,55 +222,119 @@ export const AccountForm: React.FC<AccountFormProps> = ({
             />
           </div>
 
-          {/* Jenis Akun */}
-          <div>
-            <label htmlFor="select-acc-type" className="block text-xs font-semibold uppercase text-slate-500 mb-1.5">
-              Jenis Akun <span className="text-rose-500">*</span>
-            </label>
-            <select
-              id="select-acc-type"
-              value={type}
-              onChange={(e) => setType(e.target.value as AccountType)}
-              disabled={isSubmitting}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm text-slate-900"
-            >
-              <option value="Cash">Cash (Uang Tunai)</option>
-              <option value="Bank">Bank (Rekening Bank)</option>
-              <option value="E-Wallet">E-Wallet (Dompet Digital)</option>
-              <option value="Lainnya">Lainnya</option>
-            </select>
-          </div>
+          {/* Pengaturan Saldo */}
+          {isEditMode && initialData ? (
+            <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/80">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Saldo Saat Ini:</span>
+                <span className="font-bold text-slate-900 tabular-nums">
+                  {formatRupiah(initialData.currentBalance)}
+                </span>
+              </div>
 
-          {/* Saldo Awal */}
-          <div>
-            <label htmlFor="input-acc-initial" className="block text-xs font-semibold uppercase text-slate-500 mb-1.5">
-              Saldo Awal (Rp) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="input-acc-initial"
-              type="text"
-              inputMode="numeric"
-              placeholder="Contoh: 500.000"
-              value={initialBalanceRaw ? formatRupiahInputDisplay(initialBalanceRaw) : ''}
-              onChange={(e) => setInitialBalanceRaw(e.target.value)}
-              disabled={isSubmitting}
-              className="w-full text-lg font-bold px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-900 placeholder:text-slate-400 placeholder:font-normal placeholder:text-sm"
-            />
-            <p className="text-xs text-slate-500 mt-1">
-              Saldo awal saat akun pertama kali dibuka.
-            </p>
-          </div>
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-200/70 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBalanceMode('current');
+                    setBalanceInputRaw(String(Math.max(0, initialData.currentBalance)));
+                  }}
+                  className={`py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    balanceMode === 'current'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Ubah Saldo Saat Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBalanceMode('add_funds');
+                    setBalanceInputRaw('');
+                  }}
+                  className={`py-1.5 px-2 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                    balanceMode === 'add_funds'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  + Tambah Gaji / Transfer
+                </button>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="input-acc-initial"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  {balanceMode === 'add_funds'
+                    ? 'Nominal Dana Masuk / Gaji / Transferan (Rp)'
+                    : 'Nominal Saldo Baru (Rp)'}
+                </label>
+                <input
+                  id="input-acc-initial"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Contoh: 2.500.000"
+                  value={balanceInputRaw ? formatRupiahInputDisplay(balanceInputRaw) : ''}
+                  onChange={(e) => setBalanceInputRaw(e.target.value)}
+                  disabled={isSubmitting}
+                  className="w-full text-lg font-bold px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-900"
+                />
+                {balanceMode === 'add_funds' && (
+                  <p className="text-xs text-blue-700 font-medium mt-1.5">
+                    Saldo setelah ditambah:{' '}
+                    <strong>
+                      {formatRupiah(initialData.currentBalance + parsedInput)}
+                    </strong>
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label
+                htmlFor="input-acc-initial"
+                className="block text-xs font-semibold uppercase text-slate-500 mb-1.5"
+              >
+                Saldo Awal (Rp) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                id="input-acc-initial"
+                type="text"
+                inputMode="numeric"
+                placeholder="Contoh: 1.000.000"
+                value={balanceInputRaw ? formatRupiahInputDisplay(balanceInputRaw) : ''}
+                onChange={(e) => setBalanceInputRaw(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full text-lg font-bold px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-900 placeholder:text-slate-400 placeholder:font-normal placeholder:text-sm"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {type === 'Bank'
+                  ? 'Saldo rekening bank saat ini (dapat diedit kapan saja saat ada gaji/transfer masuk).'
+                  : 'Saldo uang tunai di tangan saat ini.'}
+              </p>
+            </div>
+          )}
 
           {/* Deskripsi */}
           <div>
-            <label htmlFor="input-acc-desc" className="block text-xs font-semibold uppercase text-slate-500 mb-1.5">
-              Deskripsi (Opsional)
+            <label
+              htmlFor="input-acc-desc"
+              className="block text-xs font-semibold uppercase text-slate-500 mb-1.5"
+            >
+              Catatan / Keterangan (Opsional)
             </label>
             <div className="relative">
               <input
                 id="input-acc-desc"
                 type="text"
-                placeholder="Catatan tambahan rekening/dompet"
+                placeholder={
+                  type === 'Bank'
+                    ? 'Contoh: Rekening gaji bulanan / transferan'
+                    : 'Contoh: Uang tunai pegangan harian'
+                }
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={isSubmitting}
@@ -197,7 +360,7 @@ export const AccountForm: React.FC<AccountFormProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50 cursor-pointer"
             >
               BATAL
             </button>
@@ -205,9 +368,17 @@ export const AccountForm: React.FC<AccountFormProps> = ({
               id="btn-submit-acc-form"
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-all disabled:opacity-60"
+              className={`px-5 py-2 text-sm font-semibold text-white rounded-xl shadow-xs transition-all disabled:opacity-60 cursor-pointer ${
+                type === 'Bank'
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
-              {isSubmitting ? 'MENYIMPAN...' : isEditMode ? 'PERBARUI AKUN' : 'SIMPAN AKUN'}
+              {isSubmitting
+                ? 'MENYIMPAN...'
+                : isEditMode
+                ? 'SIMPAN PERUBAHAN'
+                : 'SIMPAN AKUN'}
             </button>
           </div>
         </form>

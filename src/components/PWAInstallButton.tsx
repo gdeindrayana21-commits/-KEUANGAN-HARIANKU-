@@ -32,7 +32,10 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   );
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  const appUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const rawOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+  const appUrl = rawOrigin.includes('ais-dev-')
+    ? rawOrigin.replace('ais-dev-', 'ais-pre-')
+    : rawOrigin;
 
   const handlePrimaryClick = async () => {
     if (isInstallable) {

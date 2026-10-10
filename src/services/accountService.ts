@@ -4,13 +4,16 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  getDoc,
-  getDocs,
   onSnapshot,
-  query,
-  where,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDoc,
+  safeGetDocs,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import { Account, AccountType, Transaction } from '../types';
 import { calculateAccountBalance } from '../utils/calculations';
 
@@ -30,9 +33,14 @@ export function subscribeAccounts(
         ...(d.data() as Omit<Account, 'id'>),
       }));
 
-      // Sort: Active first, then by name
+      // Sort: Active first, then Cash first, then Bank, then by name
       items.sort((a, b) => {
         if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+        const typeOrder = (t: AccountType) =>
+          t === 'Cash' ? 0 : t === 'Bank' ? 1 : t === 'E-Wallet' ? 2 : 3;
+        if (typeOrder(a.type) !== typeOrder(b.type)) {
+          return typeOrder(a.type) - typeOrder(b.type);
+        }
         return a.name.localeCompare(b.name);
       });
 
@@ -45,6 +53,66 @@ export function subscribeAccounts(
   );
 
   return unsubscribe;
+}
+
+export async function seedDefaultAccountsIfEmpty(userId: string): Promise<void> {
+  const path = `users/${userId}/accounts`;
+  const seedKey = `keuanganku_seeded_accounts_${userId}`;
+  try {
+    const accountsRef = collection(db, 'users', userId, 'accounts');
+    const snap = await safeGetDocs(accountsRef);
+    if (snap && !snap.empty) {
+      try {
+        localStorage.setItem(seedKey, '1');
+      } catch {
+        // Ignore storage error
+      }
+      return;
+    }
+
+    if (localStorage.getItem(seedKey) === '1') {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    const cashRef = doc(accountsRef, 'default_cash');
+    const cashAccount: Account = {
+      id: cashRef.id,
+      userId,
+      name: 'Dompet Cash (Tunai)',
+      type: 'Cash',
+      initialBalance: 0,
+      currentBalance: 0,
+      description: 'Akun utama uang tunai (Cash) untuk pemasukan & pengeluaran tunai',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const bankRef = doc(accountsRef, 'default_bank');
+    const bankAccount: Account = {
+      id: bankRef.id,
+      userId,
+      name: 'Rekening Bank Utama',
+      type: 'Bank',
+      initialBalance: 0,
+      currentBalance: 0,
+      description: 'Rekening bank untuk dana masuk, gaji, transferan & pengeluaran bank',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await safeWrite(Promise.all([setDoc(cashRef, cashAccount), setDoc(bankRef, bankAccount)]));
+    try {
+      localStorage.setItem(seedKey, '1');
+    } catch {
+      // Ignore storage error
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
 }
 
 export async function createAccount(
@@ -69,17 +137,18 @@ export async function createAccount(
       name: data.name.trim(),
       type: data.type,
       initialBalance: initial,
-      currentBalance: initial, // Starts equal to initial balance
+      currentBalance: initial,
       description: data.description?.trim() || '',
       isActive: true,
       createdAt: now,
       updatedAt: now,
     };
 
-    await setDoc(docRef, newAccount);
+    await safeWrite(setDoc(docRef, newAccount));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -90,25 +159,91 @@ export async function updateAccount(
     name: string;
     type: AccountType;
     initialBalance: number;
+    targetCurrentBalance?: number;
     description?: string;
   }
 ): Promise<void> {
   const path = `users/${userId}/accounts/${accountId}`;
   try {
     const docRef = doc(db, 'users', userId, 'accounts', accountId);
+    const snap = await safeGetDoc(docRef);
     const now = new Date().toISOString();
-    const initial = Math.round(Number(data.initialBalance) || 0);
+    let initial = Math.round(Number(data.initialBalance) || 0);
 
-    await updateDoc(docRef, {
-      name: data.name.trim(),
-      type: data.type,
-      initialBalance: initial,
-      description: data.description?.trim() || '',
-      updatedAt: now,
-    });
+    if (typeof data.targetCurrentBalance === 'number' && snap && snap.exists()) {
+      const existingAcc = snap.data() as Account;
+      const txSnap = await safeGetDocs(collection(db, 'users', userId, 'transactions'));
+      const allTxs: Transaction[] = txSnap
+        ? txSnap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<Transaction, 'id'>),
+          }))
+        : [];
+      const netFromTxs = calculateAccountBalance(0, allTxs, accountId);
+      const desiredCurrent = Math.round(Number(data.targetCurrentBalance) || 0);
+      initial = desiredCurrent - netFromTxs;
 
-    // Recalculate balance because initialBalance might have changed
+      await safeWrite(
+        updateDoc(docRef, {
+          name: data.name.trim(),
+          type: data.type,
+          initialBalance: initial,
+          currentBalance: desiredCurrent,
+          description: data.description?.trim() ?? existingAcc.description ?? '',
+          updatedAt: now,
+        })
+      );
+      return;
+    }
+
+    await safeWrite(
+      updateDoc(docRef, {
+        name: data.name.trim(),
+        type: data.type,
+        initialBalance: initial,
+        description: data.description?.trim() || '',
+        updatedAt: now,
+      })
+    );
+
     await recalculateAccountBalance(userId, accountId);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function adjustAccountCurrentBalance(
+  userId: string,
+  accountId: string,
+  newCurrentBalance: number,
+  note?: string
+): Promise<void> {
+  const path = `users/${userId}/accounts/${accountId}`;
+  try {
+    const docRef = doc(db, 'users', userId, 'accounts', accountId);
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
+
+    const txSnap = await safeGetDocs(collection(db, 'users', userId, 'transactions'));
+    const allTxs: Transaction[] = txSnap
+      ? txSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Transaction, 'id'>),
+        }))
+      : [];
+
+    const netFromTxs = calculateAccountBalance(0, allTxs, accountId);
+    const cleanTarget = Math.round(Number(newCurrentBalance) || 0);
+    const adjustedInitial = cleanTarget - netFromTxs;
+
+    await safeWrite(
+      updateDoc(docRef, {
+        initialBalance: adjustedInitial,
+        currentBalance: cleanTarget,
+        ...(note ? { description: note.slice(0, 250) } : {}),
+        updatedAt: new Date().toISOString(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -122,45 +257,57 @@ export async function toggleAccountActive(
   const path = `users/${userId}/accounts/${accountId}`;
   try {
     const docRef = doc(db, 'users', userId, 'accounts', accountId);
-    await updateDoc(docRef, {
-      isActive,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        isActive,
+        updatedAt: new Date().toISOString(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
-export async function deleteAccount(userId: string, accountId: string): Promise<void> {
+export async function deleteAccount(
+  userId: string,
+  accountId: string,
+  deleteAssociatedTransactions: boolean = true
+): Promise<void> {
   const path = `users/${userId}/accounts/${accountId}`;
   try {
-    // Check if account has any transactions
-    const txQuery = query(
-      collection(db, 'users', userId, 'transactions'),
-      where('accountId', '==', accountId)
-    );
-    const txSnap = await getDocs(txQuery);
+    if (deleteAssociatedTransactions) {
+      const txSnap = await safeGetDocs(collection(db, 'users', userId, 'transactions'));
+      const affectedOtherAccountIds = new Set<string>();
 
-    if (!txSnap.empty) {
-      throw new Error(
-        'Akun ini masih memiliki transaksi. Nonaktifkan akun atau pindahkan transaksi terlebih dahulu.'
-      );
+      if (txSnap) {
+        const deletePromises: Promise<void>[] = [];
+        for (const txDoc of txSnap.docs) {
+          const tx = txDoc.data() as Transaction;
+          if (tx.accountId === accountId || tx.toAccountId === accountId) {
+            if (tx.accountId && tx.accountId !== accountId) {
+              affectedOtherAccountIds.add(tx.accountId);
+            }
+            if (tx.toAccountId && tx.toAccountId !== accountId) {
+              affectedOtherAccountIds.add(tx.toAccountId);
+            }
+            deletePromises.push(safeWrite(deleteDoc(txDoc.ref)));
+          }
+        }
+        await Promise.all(deletePromises);
+      }
+
+      for (const otherId of affectedOtherAccountIds) {
+        await recalculateAccountBalance(userId, otherId);
+      }
     }
 
     const docRef = doc(db, 'users', userId, 'accounts', accountId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
-    if (error instanceof Error && error.message.includes('masih memiliki transaksi')) {
-      throw error;
-    }
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
-/**
- * Recalculates current balance of a single account safely:
- * initialBalance + (sum of income transactions) - (sum of expense transactions) + (transfers in) - (transfers out)
- */
 export async function recalculateAccountBalance(
   userId: string,
   accountId: string
@@ -168,55 +315,66 @@ export async function recalculateAccountBalance(
   const path = `users/${userId}/accounts/${accountId}`;
   try {
     const accountDocRef = doc(db, 'users', userId, 'accounts', accountId);
-    const accountSnap = await getDoc(accountDocRef);
-    if (!accountSnap.exists()) return 0;
+    const accountSnap = await safeGetDoc(accountDocRef);
+    if (!accountSnap || !accountSnap.exists()) return 0;
 
     const accountData = accountSnap.data() as Account;
     const initialBalance = Math.round(Number(accountData.initialBalance) || 0);
 
-    // Fetch all user transactions to account for income, expense, and transfers
-    const txSnap = await getDocs(collection(db, 'users', userId, 'transactions'));
-    const allTxs: Transaction[] = txSnap.docs.map((d) => ({
-      id: d.id,
-      ...(d.data() as Omit<Transaction, 'id'>),
-    }));
+    const txSnap = await safeGetDocs(collection(db, 'users', userId, 'transactions'));
+    const allTxs: Transaction[] = txSnap
+      ? txSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Transaction, 'id'>),
+        }))
+      : [];
 
     const newCurrentBalance = calculateAccountBalance(initialBalance, allTxs, accountId);
 
-    await updateDoc(accountDocRef, {
-      currentBalance: newCurrentBalance,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      updateDoc(accountDocRef, {
+        currentBalance: newCurrentBalance,
+        updatedAt: new Date().toISOString(),
+      })
+    );
 
     return newCurrentBalance;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+    return 0;
   }
 }
 
-/**
- * Recalculates current balance across all accounts of the user
- */
 export async function recalculateAllAccounts(userId: string): Promise<void> {
   const path = `users/${userId}/accounts`;
   try {
     const accountsRef = collection(db, 'users', userId, 'accounts');
-    const snap = await getDocs(accountsRef);
-    const txSnap = await getDocs(collection(db, 'users', userId, 'transactions'));
-    const allTxs: Transaction[] = txSnap.docs.map((d) => ({
-      id: d.id,
-      ...(d.data() as Omit<Transaction, 'id'>),
-    }));
+    const snap = await safeGetDocs(accountsRef);
+    if (!snap) return;
 
+    const txSnap = await safeGetDocs(collection(db, 'users', userId, 'transactions'));
+    const allTxs: Transaction[] = txSnap
+      ? txSnap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Transaction, 'id'>),
+        }))
+      : [];
+
+    const updates: Promise<void>[] = [];
     for (const d of snap.docs) {
       const accData = d.data() as Account;
       const initialBalance = Math.round(Number(accData.initialBalance) || 0);
       const newCurrentBalance = calculateAccountBalance(initialBalance, allTxs, d.id);
-      await updateDoc(d.ref, {
-        currentBalance: newCurrentBalance,
-        updatedAt: new Date().toISOString(),
-      });
+      updates.push(
+        safeWrite(
+          updateDoc(d.ref, {
+            currentBalance: newCurrentBalance,
+            updatedAt: new Date().toISOString(),
+          })
+        )
+      );
     }
+    await Promise.all(updates);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

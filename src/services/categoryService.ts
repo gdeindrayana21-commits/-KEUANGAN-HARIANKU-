@@ -5,11 +5,16 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
-  getDocs,
   query,
   where,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDocs,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import { Category, CategoryType } from '../types';
 
 export const DEFAULT_INCOME_CATEGORIES = [
@@ -53,7 +58,6 @@ export function subscribeCategories(
         ...(d.data() as Omit<Category, 'id'>),
       }));
 
-      // Sort alphabetically by name
       items.sort((a, b) => a.name.localeCompare(b.name));
       onData(items);
     },
@@ -68,18 +72,29 @@ export function subscribeCategories(
 
 export async function seedDefaultCategoriesIfEmpty(userId: string): Promise<void> {
   const path = `users/${userId}/categories`;
+  const seedKey = `keuanganku_seeded_categories_${userId}`;
   try {
     const categoriesRef = collection(db, 'users', userId, 'categories');
-    const existingSnap = await getDocs(categoriesRef);
-    if (!existingSnap.empty) {
-      return; // Already has categories
+    const existingSnap = await safeGetDocs(categoriesRef);
+    if (existingSnap && !existingSnap.empty) {
+      try {
+        localStorage.setItem(seedKey, '1');
+      } catch {
+        // Ignore storage error
+      }
+      return;
+    }
+
+    if (localStorage.getItem(seedKey) === '1') {
+      return;
     }
 
     const now = new Date().toISOString();
-    const batchPromises = [];
+    const batchPromises: Promise<void>[] = [];
 
-    for (const cat of DEFAULT_INCOME_CATEGORIES) {
-      const docRef = doc(categoriesRef);
+    for (let i = 0; i < DEFAULT_INCOME_CATEGORIES.length; i++) {
+      const cat = DEFAULT_INCOME_CATEGORIES[i];
+      const docRef = doc(categoriesRef, `inc_${i + 1}`);
       const catData: Category = {
         id: docRef.id,
         userId,
@@ -93,8 +108,9 @@ export async function seedDefaultCategoriesIfEmpty(userId: string): Promise<void
       batchPromises.push(setDoc(docRef, catData));
     }
 
-    for (const cat of DEFAULT_EXPENSE_CATEGORIES) {
-      const docRef = doc(categoriesRef);
+    for (let i = 0; i < DEFAULT_EXPENSE_CATEGORIES.length; i++) {
+      const cat = DEFAULT_EXPENSE_CATEGORIES[i];
+      const docRef = doc(categoriesRef, `exp_${i + 1}`);
       const catData: Category = {
         id: docRef.id,
         userId,
@@ -108,7 +124,12 @@ export async function seedDefaultCategoriesIfEmpty(userId: string): Promise<void
       batchPromises.push(setDoc(docRef, catData));
     }
 
-    await Promise.all(batchPromises);
+    await safeWrite(Promise.all(batchPromises));
+    try {
+      localStorage.setItem(seedKey, '1');
+    } catch {
+      // Ignore storage error
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -135,10 +156,11 @@ export async function createCategory(
       updatedAt: now,
     };
 
-    await setDoc(docRef, category);
+    await safeWrite(setDoc(docRef, category));
     return docRef.id;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -151,11 +173,13 @@ export async function updateCategory(
   try {
     const docRef = doc(db, 'users', userId, 'categories', categoryId);
     const now = new Date().toISOString();
-    await updateDoc(docRef, {
-      name: data.name.trim(),
-      icon: data.icon || 'Tag',
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        name: data.name.trim(),
+        icon: data.icon || 'Tag',
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -169,35 +193,33 @@ export async function toggleCategoryActive(
   const path = `users/${userId}/categories/${categoryId}`;
   try {
     const docRef = doc(db, 'users', userId, 'categories', categoryId);
-    await updateDoc(docRef, {
-      isActive,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        isActive,
+        updatedAt: new Date().toISOString(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
-/**
- * Check if category is used in any transactions before deleting
- */
 export async function deleteCategory(userId: string, categoryId: string): Promise<void> {
   const path = `users/${userId}/categories/${categoryId}`;
   try {
-    // Check if transactions use this category
     const txQuery = query(
       collection(db, 'users', userId, 'transactions'),
       where('categoryId', '==', categoryId)
     );
-    const txSnap = await getDocs(txQuery);
-    if (!txSnap.empty) {
+    const txSnap = await safeGetDocs(txQuery);
+    if (txSnap && !txSnap.empty) {
       throw new Error(
         `Kategori ini masih digunakan oleh ${txSnap.size} transaksi. Silakan nonaktifkan kategori ini atau ubah transaksi terkait terlebih dahulu.`
       );
     }
 
     const docRef = doc(db, 'users', userId, 'categories', categoryId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     if (error instanceof Error && error.message.includes('masih digunakan')) {
       throw error;

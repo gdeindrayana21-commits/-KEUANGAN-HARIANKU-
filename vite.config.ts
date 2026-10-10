@@ -1,15 +1,107 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, Plugin} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+const NOOP_DEV_SW_MODULE = `
+if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    }).catch(() => {});
+  }
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      for (const key of keys) {
+        caches.delete(key);
+      }
+    }).catch(() => {});
+  }
+}
+export default function registerDevSW() {}
+`;
+
+const SELF_DESTROYING_SW = `
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.registration.unregister()
+      .then(() => self.caches ? self.caches.keys() : [])
+      .then((keys) => Promise.all(keys.map((k) => self.caches.delete(k))))
+      .then(() => self.clients.matchAll())
+      .then((clients) => {
+        clients.forEach((client) => {
+          if ('navigate' in client) {
+            client.navigate(client.url);
+          }
+        });
+      })
+  );
+});
+`;
+
+function pwaDevHmrGuardPlugin(): Plugin {
+  return {
+    name: 'pwa-dev-hmr-guard',
+    enforce: 'pre',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url || '';
+        if (url.includes('pwa-entry-point-loaded')) {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          res.end(NOOP_DEV_SW_MODULE);
+          return;
+        }
+        if (
+          url.startsWith('/dev-sw.js') ||
+          url.startsWith('/sw.js') ||
+          url.startsWith('/registerSW.js')
+        ) {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+          res.end(SELF_DESTROYING_SW);
+          return;
+        }
+        next();
+      });
+    },
+    resolveId(id) {
+      if (id.includes('pwa-entry-point-loaded')) {
+        return '\0virtual:pwa-entry-point-loaded-safe';
+      }
+      return null;
+    },
+    load(id) {
+      if (
+        id === '\0virtual:pwa-entry-point-loaded-safe' ||
+        id.includes('pwa-entry-point-loaded')
+      ) {
+        return NOOP_DEV_SW_MODULE;
+      }
+      return null;
+    },
+  };
+}
+
+export default defineConfig(({command}) => {
+  const isDev = command === 'serve';
+
   return {
     plugins: [
+      pwaDevHmrGuardPlugin(),
       react(),
       tailwindcss(),
       VitePWA({
+        disable: isDev,
         registerType: 'autoUpdate',
         includeAssets: [
           'icon.svg',
@@ -86,8 +178,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
-          type: 'module',
+          enabled: false,
         },
       }),
     ],
@@ -98,7 +189,7 @@ export default defineConfig(() => {
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},

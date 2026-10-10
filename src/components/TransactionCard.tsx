@@ -1,5 +1,12 @@
 import React from 'react';
-import { Edit2, Trash2, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from 'lucide-react';
+import {
+  Edit2,
+  Trash2,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  Receipt,
+} from 'lucide-react';
 import { Transaction } from '../types';
 import { formatRupiah } from '../utils/currency';
 import { formatTanggalIndonesia } from '../utils/date';
@@ -8,12 +15,14 @@ interface TransactionCardProps {
   transaction: Transaction;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
+  onViewReceipt?: (tx: Transaction) => void;
 }
 
 export const TransactionCard: React.FC<TransactionCardProps> = ({
   transaction,
   onEdit,
   onDelete,
+  onViewReceipt,
 }) => {
   const isIncome = transaction.type === 'income';
   const isTransfer = transaction.type === 'transfer';
@@ -46,10 +55,10 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
             <h4 className="text-sm font-semibold text-slate-900">
               {isTransfer ? 'Transfer Antar Akun' : transaction.categoryName}
             </h4>
-            <div className="flex items-center space-x-2 text-xs text-slate-500 mt-0.5">
+            <div className="flex items-center flex-wrap gap-1.5 text-xs text-slate-500 mt-0.5">
               <span>{formatTanggalIndonesia(transaction.date)}</span>
-              <span>•</span>
-              <span className="bg-slate-100 px-2 py-0.5 rounded-md font-medium text-slate-700">
+              <span>·</span>
+              <span className="font-medium text-slate-700">
                 {isTransfer
                   ? `${transaction.accountName} ➔ ${transaction.toAccountName || 'Tujuan'}`
                   : transaction.accountName}
@@ -61,7 +70,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
         {/* Amount */}
         <div className="text-right">
           <div
-            className={`text-base font-bold tracking-tight ${
+            className={`text-base font-bold tracking-tight tabular-nums ${
               isIncome
                 ? 'text-emerald-600'
                 : isTransfer
@@ -87,12 +96,37 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
         </p>
       )}
 
+      {/* Receipt Thumbnail / View Button */}
+      {transaction.receiptImageUrl && onViewReceipt && (
+        <div className="flex items-center justify-between p-2.5 bg-emerald-50/60 border border-emerald-200/70 rounded-xl">
+          <div className="flex items-center space-x-2.5">
+            <img
+              src={transaction.receiptImageUrl}
+              alt="Struk Pembelanjaan"
+              referrerPolicy="no-referrer"
+              className="w-10 h-10 object-cover rounded-lg border border-emerald-200 bg-white"
+            />
+            <span className="text-xs font-semibold text-emerald-900">
+              Bukti / Struk Pembelanjaan Tersedia
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => onViewReceipt(transaction)}
+            className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+          >
+            <Receipt className="w-3.5 h-3.5" />
+            <span>Lihat Struk</span>
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-50">
         <button
           id={`btn-edit-tx-card-${transaction.id}`}
           type="button"
           onClick={() => onEdit(transaction)}
-          className="flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
         >
           <Edit2 className="w-3.5 h-3.5" />
           <span>Edit</span>
@@ -101,7 +135,7 @@ export const TransactionCard: React.FC<TransactionCardProps> = ({
           id={`btn-delete-tx-card-${transaction.id}`}
           type="button"
           onClick={() => onDelete(transaction)}
-          className="flex items-center space-x-1 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+          className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
         >
           <Trash2 className="w-3.5 h-3.5" />
           <span>Hapus</span>

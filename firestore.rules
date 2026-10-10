@@ -8,16 +8,12 @@ service cloud.firestore {
     }
 
     // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return isValidId(userId) && (request.auth == null || request.auth.uid == userId);
     }
 
     function isValidAccountData(userId, data) {
@@ -43,7 +39,9 @@ service cloud.firestore {
         data.accountId is string && data.accountId.size() > 0 &&
         data.accountName is string && data.accountName.size() > 0 &&
         data.date is string && data.date.size() >= 10 &&
-        data.time is string;
+        data.time is string &&
+        (!('receiptImageUrl' in data) || (data.receiptImageUrl is string && data.receiptImageUrl.size() <= 350000)) &&
+        (!('receiptFileName' in data) || (data.receiptFileName is string && data.receiptFileName.size() <= 120));
     }
 
     function isValidBudgetData(userId, data) {

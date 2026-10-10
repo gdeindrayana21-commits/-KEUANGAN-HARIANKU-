@@ -1,9 +1,19 @@
-import React from 'react';
-import { Edit2, Trash2, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ReceiptText, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Edit2,
+  Trash2,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ReceiptText,
+  Plus,
+  Receipt,
+} from 'lucide-react';
 import { Transaction } from '../types';
 import { formatRupiah } from '../utils/currency';
 import { formatTanggalIndonesia } from '../utils/date';
 import { TransactionCard } from './TransactionCard';
+import { ReceiptModal } from './ReceiptModal';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -20,6 +30,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   onAddNew,
   emptyMessage = 'Belum ada transaksi.',
 }) => {
+  const [viewingReceiptTx, setViewingReceiptTx] = useState<Transaction | null>(null);
+
   if (transactions.length === 0) {
     return (
       <div
@@ -31,14 +43,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({
         </div>
         <p className="text-sm font-medium text-slate-700">{emptyMessage}</p>
         <p className="text-xs text-slate-500 mt-1 max-w-sm">
-          Mulai catat transaksi pemasukan, pengeluaran, atau transfer dengan mudah.
+          Mulai catat transaksi pemasukan (Cash), pengeluaran (Cash/Bank), beserta foto struk pembelanjaan.
         </p>
         {onAddNew && (
           <button
             id="btn-empty-add-tx"
             type="button"
             onClick={onAddNew}
-            className="mt-4 inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors"
+            className="mt-4 inline-flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>+ Tambah Transaksi</span>
@@ -58,6 +70,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
             transaction={tx}
             onEdit={onEdit}
             onDelete={onDelete}
+            onViewReceipt={(t) => setViewingReceiptTx(t)}
           />
         ))}
       </div>
@@ -71,7 +84,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 <th className="py-3 px-4">Tanggal</th>
                 <th className="py-3 px-3">Jenis</th>
                 <th className="py-3 px-4">Kategori</th>
-                <th className="py-3 px-4">Keterangan</th>
+                <th className="py-3 px-4">Keterangan & Struk</th>
                 <th className="py-3 px-4">Akun</th>
                 <th className="py-3 px-4 text-right">Nominal</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
@@ -130,9 +143,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                       {isTransfer ? 'Transfer Antar Akun' : tx.categoryName}
                     </td>
 
-                    {/* Keterangan */}
-                    <td className="py-3 px-4 text-slate-600 max-w-xs truncate">
-                      {tx.description || <span className="text-slate-300">-</span>}
+                    {/* Keterangan & Struk */}
+                    <td className="py-3 px-4 text-slate-600 max-w-xs">
+                      <div className="truncate">
+                        {tx.description || <span className="text-slate-300">-</span>}
+                      </div>
+                      {tx.receiptImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceiptTx(tx)}
+                          className="mt-1 inline-flex items-center space-x-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                        >
+                          <Receipt className="w-3 h-3" />
+                          <span>Lihat Foto Struk</span>
+                        </button>
+                      )}
                     </td>
 
                     {/* Akun */}
@@ -146,7 +171,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                     {/* Nominal */}
                     <td
-                      className={`py-3 px-4 whitespace-nowrap text-right font-bold tracking-tight ${
+                      className={`py-3 px-4 whitespace-nowrap text-right font-bold tracking-tight tabular-nums ${
                         isIncome
                           ? 'text-emerald-600'
                           : isTransfer
@@ -164,12 +189,22 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                     {/* Aksi */}
                     <td className="py-3 px-4 whitespace-nowrap text-center">
                       <div className="inline-flex items-center space-x-1">
+                        {tx.receiptImageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingReceiptTx(tx)}
+                            title="Lihat foto struk pembelanjaan"
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Receipt className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           id={`btn-table-edit-${tx.id}`}
                           type="button"
                           onClick={() => onEdit(tx)}
                           title="Edit transaksi"
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -178,7 +213,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           type="button"
                           onClick={() => onDelete(tx)}
                           title="Hapus transaksi"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -191,6 +226,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Receipt Lightbox Modal */}
+      <ReceiptModal
+        transaction={viewingReceiptTx}
+        onClose={() => setViewingReceiptTx(null)}
+      />
     </div>
   );
 };

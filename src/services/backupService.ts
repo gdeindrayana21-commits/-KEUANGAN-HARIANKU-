@@ -1,11 +1,16 @@
 import {
   collection,
   doc,
-  getDocs,
   setDoc,
   deleteDoc,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDocs,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import {
   Account,
   Category,
@@ -23,7 +28,7 @@ export async function exportAllUserData(userId: string): Promise<BackupData> {
   const path = `users/${userId}`;
   try {
     const fetchSubcollection = async <T>(subName: string): Promise<T[]> => {
-      const snap = await getDocs(collection(db, 'users', userId, subName));
+      const snap = await safeGetDocs(collection(db, 'users', userId, subName));
       return snap.docs.map((d) => ({
         id: d.id,
         ...(d.data() as any),
@@ -75,11 +80,16 @@ export async function exportAllUserData(userId: string): Promise<BackupData> {
 }
 
 export function downloadBackupJson(backupData: BackupData): void {
-  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupData, null, 2));
+  const dataStr =
+    'data:text/json;charset=utf-8,' +
+    encodeURIComponent(JSON.stringify(backupData, null, 2));
   const dateStr = new Date().toISOString().slice(0, 10);
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute('href', dataStr);
-  downloadAnchor.setAttribute('download', `backup_keuangan_harianku_${dateStr}.json`);
+  downloadAnchor.setAttribute(
+    'download',
+    `backup_keuangan_harianku_${dateStr}.json`
+  );
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
@@ -107,23 +117,61 @@ export function validateBackupFile(fileContent: string): RestorePreview {
   try {
     const parsed = JSON.parse(fileContent) as Partial<BackupData>;
     if (!parsed || typeof parsed !== 'object') {
-      return { valid: false, version: '', exportedAt: '', counts: { accounts: 0, categories: 0, transactions: 0, budgets: 0, savingsGoals: 0, debts: 0, receivables: 0, recurringTransactions: 0 }, error: 'Format file tidak valid (bukan JSON objek).' };
+      return {
+        valid: false,
+        version: '',
+        exportedAt: '',
+        counts: {
+          accounts: 0,
+          categories: 0,
+          transactions: 0,
+          budgets: 0,
+          savingsGoals: 0,
+          debts: 0,
+          receivables: 0,
+          recurringTransactions: 0,
+        },
+        error: 'Format file tidak valid (bukan JSON objek).',
+      };
     }
 
     if (!parsed.data || typeof parsed.data !== 'object') {
-      return { valid: false, version: parsed.version || '', exportedAt: '', counts: { accounts: 0, categories: 0, transactions: 0, budgets: 0, savingsGoals: 0, debts: 0, receivables: 0, recurringTransactions: 0 }, error: 'Struktur data cadangan tidak ditemukan.' };
+      return {
+        valid: false,
+        version: parsed.version || '',
+        exportedAt: '',
+        counts: {
+          accounts: 0,
+          categories: 0,
+          transactions: 0,
+          budgets: 0,
+          savingsGoals: 0,
+          debts: 0,
+          receivables: 0,
+          recurringTransactions: 0,
+        },
+        error: 'Struktur data cadangan tidak ditemukan.',
+      };
     }
 
     const { data } = parsed;
     const counts = {
       accounts: Array.isArray(data.accounts) ? data.accounts.length : 0,
       categories: Array.isArray(data.categories) ? data.categories.length : 0,
-      transactions: Array.isArray(data.transactions) ? data.transactions.length : 0,
+      transactions: Array.isArray(data.transactions)
+        ? data.transactions.length
+        : 0,
       budgets: Array.isArray(data.budgets) ? data.budgets.length : 0,
-      savingsGoals: Array.isArray(data.savingsGoals) ? data.savingsGoals.length : 0,
+      savingsGoals: Array.isArray(data.savingsGoals)
+        ? data.savingsGoals.length
+        : 0,
       debts: Array.isArray(data.debts) ? data.debts.length : 0,
-      receivables: Array.isArray(data.receivables) ? data.receivables.length : 0,
-      recurringTransactions: Array.isArray(data.recurringTransactions) ? data.recurringTransactions.length : 0,
+      receivables: Array.isArray(data.receivables)
+        ? data.receivables.length
+        : 0,
+      recurringTransactions: Array.isArray(data.recurringTransactions)
+        ? data.recurringTransactions.length
+        : 0,
     };
 
     return {
@@ -133,12 +181,21 @@ export function validateBackupFile(fileContent: string): RestorePreview {
       counts,
       rawBackup: parsed as BackupData,
     };
-  } catch (err) {
+  } catch {
     return {
       valid: false,
       version: '',
       exportedAt: '',
-      counts: { accounts: 0, categories: 0, transactions: 0, budgets: 0, savingsGoals: 0, debts: 0, receivables: 0, recurringTransactions: 0 },
+      counts: {
+        accounts: 0,
+        categories: 0,
+        transactions: 0,
+        budgets: 0,
+        savingsGoals: 0,
+        debts: 0,
+        receivables: 0,
+        recurringTransactions: 0,
+      },
       error: 'Gagal membaca file JSON. Pastikan file tidak rusak.',
     };
   }
@@ -159,33 +216,35 @@ export async function restoreUserData(
       { name: 'savingsGoals', items: backup.data.savingsGoals || [] },
       { name: 'debts', items: backup.data.debts || [] },
       { name: 'receivables', items: backup.data.receivables || [] },
-      { name: 'recurringTransactions', items: backup.data.recurringTransactions || [] },
+      {
+        name: 'recurringTransactions',
+        items: backup.data.recurringTransactions || [],
+      },
     ];
 
-    // If replace mode, first clear existing documents in subcollections
     if (mode === 'replace') {
       for (const col of collectionsToProcess) {
-        const snap = await getDocs(collection(db, 'users', userId, col.name));
+        const snap = await safeGetDocs(
+          collection(db, 'users', userId, col.name)
+        );
         for (const d of snap.docs) {
-          await deleteDoc(d.ref);
+          await safeWrite(deleteDoc(d.ref));
         }
       }
     }
 
-    // Write / Merge items with user's current userId
     for (const col of collectionsToProcess) {
       for (const item of col.items) {
         if (!item.id) continue;
         const cleanItem = {
           ...item,
-          userId, // ensure user isolation matches currently logged in user
+          userId,
         };
         const docRef = doc(db, 'users', userId, col.name, item.id);
-        await setDoc(docRef, cleanItem, { merge: true });
+        await safeWrite(setDoc(docRef, cleanItem, { merge: true }));
       }
     }
 
-    // Recalculate balances after all accounts and transactions are restored
     await recalculateAllAccounts(userId);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -199,5 +258,9 @@ export async function restoreAllData(
   backup: BackupData,
   mode: 'merge' | 'overwrite' = 'merge'
 ): Promise<void> {
-  return restoreUserData(userId, backup, mode === 'overwrite' ? 'replace' : 'merge');
+  return restoreUserData(
+    userId,
+    backup,
+    mode === 'overwrite' ? 'replace' : 'merge'
+  );
 }

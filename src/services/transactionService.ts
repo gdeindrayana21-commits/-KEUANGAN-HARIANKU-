@@ -4,9 +4,10 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, safeWrite, handleFirestoreError, OperationType } from './firebase';
 import { Transaction, TransactionType } from '../types';
 import { recalculateAccountBalance } from './accountService';
 
@@ -26,7 +27,6 @@ export function subscribeTransactions(
         ...(d.data() as Omit<Transaction, 'id'>),
       }));
 
-      // Sort descending by date, then by time, then by createdAt
       items.sort((a, b) => {
         const dateCompare = b.date.localeCompare(a.date);
         if (dateCompare !== 0) return dateCompare;
@@ -60,6 +60,8 @@ export async function createTransaction(
     date: string;
     time: string;
     description?: string;
+    receiptImageUrl?: string;
+    receiptFileName?: string;
   }
 ): Promise<string> {
   const path = `users/${userId}/transactions`;
@@ -91,13 +93,14 @@ export async function createTransaction(
       date: data.date,
       time: data.time,
       description: data.description?.trim() || '',
+      ...(data.receiptImageUrl ? { receiptImageUrl: data.receiptImageUrl } : {}),
+      ...(data.receiptFileName ? { receiptFileName: data.receiptFileName.slice(0, 120) } : {}),
       createdAt: now,
       updatedAt: now,
     };
 
-    await setDoc(docRef, newTx);
+    await safeWrite(setDoc(docRef, newTx));
 
-    // Automatically recalculate account balance safely
     await recalculateAccountBalance(userId, data.accountId);
     if (data.toAccountId) {
       await recalculateAccountBalance(userId, data.toAccountId);
@@ -105,10 +108,14 @@ export async function createTransaction(
 
     return docRef.id;
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('Nominal transaksi') || error.message.includes('Akun tujuan'))) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('Nominal transaksi') || error.message.includes('Akun tujuan'))
+    ) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -128,6 +135,8 @@ export async function updateTransaction(
     date: string;
     time: string;
     description?: string;
+    receiptImageUrl?: string;
+    receiptFileName?: string;
   }
 ): Promise<void> {
   const path = `users/${userId}/transactions/${transactionId}`;
@@ -164,15 +173,21 @@ export async function updateTransaction(
       updatePayload.toAccountName = data.toAccountName;
     }
 
-    await updateDoc(docRef, updatePayload);
+    if (data.receiptImageUrl) {
+      updatePayload.receiptImageUrl = data.receiptImageUrl;
+      updatePayload.receiptFileName = (data.receiptFileName || 'struk-belanja.jpg').slice(0, 120);
+    } else if (oldTx.receiptImageUrl && !data.receiptImageUrl) {
+      updatePayload.receiptImageUrl = deleteField();
+      updatePayload.receiptFileName = deleteField();
+    }
 
-    // Recalculate new account balances
+    await safeWrite(updateDoc(docRef, updatePayload));
+
     await recalculateAccountBalance(userId, data.accountId);
     if (data.toAccountId) {
       await recalculateAccountBalance(userId, data.toAccountId);
     }
 
-    // If account was changed, also recalculate the previous account balance!
     if (oldTx.accountId !== data.accountId) {
       await recalculateAccountBalance(userId, oldTx.accountId);
     }
@@ -180,7 +195,10 @@ export async function updateTransaction(
       await recalculateAccountBalance(userId, oldTx.toAccountId);
     }
   } catch (error) {
-    if (error instanceof Error && (error.message.includes('Nominal transaksi') || error.message.includes('Akun tujuan'))) {
+    if (
+      error instanceof Error &&
+      (error.message.includes('Nominal transaksi') || error.message.includes('Akun tujuan'))
+    ) {
       throw error;
     }
     handleFirestoreError(error, OperationType.UPDATE, path);
@@ -196,9 +214,8 @@ export async function deleteTransaction(
   const path = `users/${userId}/transactions/${transactionId}`;
   try {
     const docRef = doc(db, 'users', userId, 'transactions', transactionId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
 
-    // Recalculate account balance
     await recalculateAccountBalance(userId, accountId);
     if (toAccountId) {
       await recalculateAccountBalance(userId, toAccountId);

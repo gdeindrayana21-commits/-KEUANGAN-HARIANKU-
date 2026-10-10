@@ -60,6 +60,8 @@ export interface Transaction {
   date: string; // Format: YYYY-MM-DD
   time: string; // Format: HH:mm
   description?: string;
+  receiptImageUrl?: string;
+  receiptFileName?: string;
   createdAt: string;
   updatedAt: string;
 }

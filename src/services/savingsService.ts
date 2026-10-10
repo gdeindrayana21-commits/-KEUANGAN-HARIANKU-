@@ -4,10 +4,15 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
-  getDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import {
+  db,
+  safeGetDoc,
+  safeWrite,
+  handleFirestoreError,
+  OperationType,
+} from './firebase';
 import { SavingsGoal } from '../types';
 
 export function subscribeSavingsGoals(
@@ -26,7 +31,6 @@ export function subscribeSavingsGoals(
         ...(d.data() as Omit<SavingsGoal, 'id'>),
       }));
 
-      // Sort: in_progress first, then by targetDate ascending
       items.sort((a, b) => {
         if (a.status !== b.status) return a.status === 'in_progress' ? -1 : 1;
         return a.targetDate.localeCompare(b.targetDate);
@@ -81,13 +85,14 @@ export async function createSavingsGoal(
       updatedAt: now,
     };
 
-    await setDoc(docRef, newGoal);
+    await safeWrite(setDoc(docRef, newGoal));
     return docRef.id;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Target nominal')) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -115,17 +120,19 @@ export async function updateSavingsGoal(
       throw new Error('Target nominal tabungan harus lebih dari 0.');
     }
 
-    await updateDoc(docRef, {
-      name: data.name.trim(),
-      targetAmount: target,
-      currentAmount: current,
-      targetDate: data.targetDate,
-      accountId: data.accountId || '',
-      accountName: data.accountName || '',
-      status: current >= target ? 'achieved' : 'in_progress',
-      notes: data.notes?.trim() || '',
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        name: data.name.trim(),
+        targetAmount: target,
+        currentAmount: current,
+        targetDate: data.targetDate,
+        accountId: data.accountId || '',
+        accountName: data.accountName || '',
+        status: current >= target ? 'achieved' : 'in_progress',
+        notes: data.notes?.trim() || '',
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Target nominal')) {
       throw error;
@@ -142,18 +149,20 @@ export async function adjustSavingsAmount(
   const path = `users/${userId}/savingsGoals/${goalId}`;
   try {
     const docRef = doc(db, 'users', userId, 'savingsGoals', goalId);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) return;
+    const snap = await safeGetDoc(docRef);
+    if (!snap || !snap.exists()) return;
 
     const data = snap.data() as SavingsGoal;
     const newAmount = Math.max(0, Math.round(data.currentAmount + deltaAmount));
     const now = new Date().toISOString();
 
-    await updateDoc(docRef, {
-      currentAmount: newAmount,
-      status: newAmount >= data.targetAmount ? 'achieved' : 'in_progress',
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        currentAmount: newAmount,
+        status: newAmount >= data.targetAmount ? 'achieved' : 'in_progress',
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -165,7 +174,7 @@ export async function deleteSavingsGoal(userId: string, goalId: string): Promise
   const path = `users/${userId}/savingsGoals/${goalId}`;
   try {
     const docRef = doc(db, 'users', userId, 'savingsGoals', goalId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

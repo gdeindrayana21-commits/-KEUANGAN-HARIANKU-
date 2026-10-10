@@ -6,7 +6,7 @@ import {
   deleteDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, safeWrite, handleFirestoreError, OperationType } from './firebase';
 import { RecurringTransaction, RecurringFrequency, TransactionType } from '../types';
 import { createTransaction } from './transactionService';
 import { getTodayString, parseLocalDate, toDateString } from '../utils/date';
@@ -41,7 +41,6 @@ export function subscribeRecurringTransactions(
         ...(d.data() as Omit<RecurringTransaction, 'id'>),
       }));
 
-      // Sort: Active first, then by nextExecutionDate
       items.sort((a, b) => {
         if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
         return a.nextExecutionDate.localeCompare(b.nextExecutionDate);
@@ -88,7 +87,8 @@ export async function createRecurringTransaction(
       throw new Error('Nominal transaksi harus lebih dari 0.');
     }
 
-    const defaultTitle = data.title?.trim() || data.description?.trim() || data.categoryName || 'Transaksi Rutin';
+    const defaultTitle =
+      data.title?.trim() || data.description?.trim() || data.categoryName || 'Transaksi Rutin';
 
     const item: RecurringTransaction = {
       id: docRef.id,
@@ -112,13 +112,14 @@ export async function createRecurringTransaction(
       updatedAt: now,
     };
 
-    await setDoc(docRef, item);
+    await safeWrite(setDoc(docRef, item));
     return docRef.id;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal transaksi')) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -165,12 +166,13 @@ export async function updateRecurringTransaction(
     if (data.toAccountName !== undefined) updatePayload.toAccountName = data.toAccountName;
     if (data.frequency !== undefined) updatePayload.frequency = data.frequency;
     if (data.startDate !== undefined) updatePayload.startDate = data.startDate;
-    if (data.nextExecutionDate !== undefined) updatePayload.nextExecutionDate = data.nextExecutionDate;
+    if (data.nextExecutionDate !== undefined)
+      updatePayload.nextExecutionDate = data.nextExecutionDate;
     if (data.autoExecute !== undefined) updatePayload.autoExecute = !!data.autoExecute;
     if (data.isActive !== undefined) updatePayload.isActive = !!data.isActive;
     if (data.description !== undefined) updatePayload.description = data.description.trim();
 
-    await updateDoc(docRef, updatePayload);
+    await safeWrite(updateDoc(docRef, updatePayload));
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal transaksi')) {
       throw error;
@@ -187,10 +189,12 @@ export async function toggleRecurringActive(
   const path = `users/${userId}/recurringTransactions/${recurringId}`;
   try {
     const docRef = doc(db, 'users', userId, 'recurringTransactions', recurringId);
-    await updateDoc(docRef, {
-      isActive,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        isActive,
+        updatedAt: new Date().toISOString(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -204,9 +208,10 @@ export async function executeRecurringTransaction(
   try {
     const now = new Date();
     const executionDate = recurring.nextExecutionDate || getTodayString();
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(
+      now.getMinutes()
+    ).padStart(2, '0')}`;
 
-    // 1. Create the actual transaction
     await createTransaction(userId, {
       type: recurring.type,
       amount: recurring.amount,
@@ -218,17 +223,20 @@ export async function executeRecurringTransaction(
       toAccountName: recurring.toAccountName,
       date: executionDate,
       time: timeStr,
-      description: `[Rutin] ${recurring.title}${recurring.description ? ' - ' + recurring.description : ''}`,
+      description: `[Rutin] ${recurring.title}${
+        recurring.description ? ' - ' + recurring.description : ''
+      }`,
     });
 
-    // 2. Advance next execution date
     const nextDate = calculateNextDate(executionDate, recurring.frequency);
     const docRef = doc(db, 'users', userId, 'recurringTransactions', recurring.id);
-    await updateDoc(docRef, {
-      lastExecutedDate: executionDate,
-      nextExecutionDate: nextDate,
-      updatedAt: new Date().toISOString(),
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        lastExecutedDate: executionDate,
+        nextExecutionDate: nextDate,
+        updatedAt: new Date().toISOString(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -241,7 +249,7 @@ export async function deleteRecurringTransaction(
   const path = `users/${userId}/recurringTransactions/${recurringId}`;
   try {
     const docRef = doc(db, 'users', userId, 'recurringTransactions', recurringId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

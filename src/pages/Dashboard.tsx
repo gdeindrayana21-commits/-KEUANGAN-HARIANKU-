@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { Filter, Calendar, ReceiptText, ArrowRight, Sparkles } from 'lucide-react';
+import {
+  Filter,
+  Calendar,
+  ReceiptText,
+  ArrowRight,
+  Banknote,
+  Landmark,
+  ArrowUpRight,
+  Settings2,
+} from 'lucide-react';
 import { Account, Transaction, PeriodFilter } from '../types';
 import {
   calculateDashboardSummary,
@@ -8,6 +17,7 @@ import {
   calculateBalanceProgress,
   calculateAutomatedInsights,
 } from '../utils/calculations';
+import { formatRupiah } from '../utils/currency';
 import { getTodayString } from '../utils/date';
 import { SummaryCard } from '../components/SummaryCard';
 import { CashFlowChart } from '../components/CashFlowChart';
@@ -15,6 +25,7 @@ import { CategoryPieChart } from '../components/CategoryPieChart';
 import { BalanceProgressChart } from '../components/BalanceProgressChart';
 import { FinancialAnalysisCard } from '../components/FinancialAnalysisCard';
 import { TransactionList } from '../components/TransactionList';
+import { BankTopUpModal } from '../components/BankTopUpModal';
 
 interface DashboardProps {
   accounts: Account[];
@@ -23,6 +34,20 @@ interface DashboardProps {
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (tx: Transaction) => void;
   onViewAllTransactions: () => void;
+  onManageAccounts?: () => void;
+  onRecordBankIncome?: (data: {
+    accountId: string;
+    accountName: string;
+    amount: number;
+    sourceLabel: string;
+    date: string;
+    description: string;
+  }) => Promise<void>;
+  onDirectAdjustBalance?: (
+    accountId: string,
+    newCurrentBalance: number,
+    note: string
+  ) => Promise<void>;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -32,6 +57,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onEditTransaction,
   onDeleteTransaction,
   onViewAllTransactions,
+  onManageAccounts,
+  onRecordBankIncome,
+  onDirectAdjustBalance,
 }) => {
   const [period, setPeriod] = useState<PeriodFilter>('this_month');
   const [customStart, setCustomStart] = useState<string>(getTodayString());
@@ -39,6 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [appliedCustomStart, setAppliedCustomStart] = useState<string>('');
   const [appliedCustomEnd, setAppliedCustomEnd] = useState<string>('');
   const [showCustomInputs, setShowCustomInputs] = useState<boolean>(false);
+  const [topUpBankAccount, setTopUpBankAccount] = useState<Account | null>(null);
 
   const periodOptions: { id: PeriodFilter; label: string }[] = [
     { id: 'today', label: 'Hari Ini' },
@@ -89,6 +118,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  // Separate Cash vs Bank balances
+  const activeAccounts = accounts.filter((a) => a.isActive);
+  const cashAccounts = activeAccounts.filter((a) => a.type === 'Cash');
+  const bankAccounts = activeAccounts.filter((a) => a.type !== 'Cash');
+
+  const totalCashBalance = cashAccounts.reduce((sum, a) => sum + a.currentBalance, 0);
+  const totalBankBalance = bankAccounts.reduce((sum, a) => sum + a.currentBalance, 0);
+
   // Calculations
   const summary = calculateDashboardSummary(transactions, accounts, period, activeStart, activeEnd);
   const categoriesBreakdown = calculateCategoryBreakdown(
@@ -101,15 +138,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
     'expense'
   );
   const cashFlowData = calculateCashFlowChartData(transactions, period, activeStart, activeEnd);
-  const balanceProgressData = calculateBalanceProgress(transactions, accounts, period, activeStart, activeEnd);
-  const automatedInsights = calculateAutomatedInsights(transactions, accounts, period, activeStart, activeEnd);
+  const balanceProgressData = calculateBalanceProgress(
+    transactions,
+    accounts,
+    period,
+    activeStart,
+    activeEnd
+  );
+  const automatedInsights = calculateAutomatedInsights(
+    transactions,
+    accounts,
+    period,
+    activeStart,
+    activeEnd
+  );
 
-  // Top 10 latest transactions
   const recentTransactions = transactions.slice(0, 10);
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Filter Periode (Section 3) */}
+      {/* 1. Header & Filter Periode */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -117,7 +165,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               Dashboard Keuangan
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Ringkasan kondisi keuangan Anda
+              Ringkasan kondisi keuangan Akun Cash & Rekening Bank Anda
             </p>
           </div>
 
@@ -186,7 +234,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
         )}
       </div>
 
-      {/* 2. 5 Kartu Statistik Utama (Sections 4 & 5) */}
+      {/* Pemisahan Saldo Akun Cash vs Saldo Rekening Bank */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card Akun Cash */}
+        <div className="bg-white p-5 rounded-2xl border border-emerald-200/90 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Banknote className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-emerald-700">
+                  Akun Cash (Uang Tunai & Pemasukan)
+                </span>
+                <div className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">
+                  {formatRupiah(totalCashBalance)}
+                </div>
+              </div>
+            </div>
+            {onManageAccounts && (
+              <button
+                type="button"
+                onClick={onManageAccounts}
+                className="text-xs font-semibold text-slate-500 hover:text-emerald-700 flex items-center space-x-1 cursor-pointer"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                <span>Kelola / Hapus</span>
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Seluruh pemasukan dijadikan satu di <strong>Akun Cash</strong> (otomatis bertambah). Pengeluaran Cash hanya memotong saldo Cash tanpa mengurangi saldo Bank.
+          </p>
+        </div>
+
+        {/* Card Akun Bank */}
+        <div className="bg-white p-5 rounded-2xl border border-blue-200/90 shadow-xs flex flex-col justify-between space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Landmark className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-blue-700">
+                  Akun Rekening Bank
+                </span>
+                <div className="text-2xl font-bold text-slate-900 tabular-nums mt-0.5">
+                  {formatRupiah(totalBankBalance)}
+                </div>
+              </div>
+            </div>
+            {bankAccounts.length > 0 && onRecordBankIncome && onDirectAdjustBalance ? (
+              <button
+                type="button"
+                onClick={() => setTopUpBankAccount(bankAccounts[0])}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center space-x-1 shadow-xs transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>+ Gaji / Edit Saldo Bank</span>
+              </button>
+            ) : (
+              onManageAccounts && (
+                <button
+                  type="button"
+                  onClick={onManageAccounts}
+                  className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
+                >
+                  + Buat Akun Bank
+                </button>
+              )
+            )}
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            Otomatis berkurang setiap ada transaksi pengeluaran pada Akun Bank. Bisa diedit kapan saja saat ada dana masuk, gaji, atau transferan.
+          </p>
+        </div>
+      </div>
+
+      {/* 2. 5 Kartu Statistik Utama */}
       <SummaryCard
         totalBalance={summary.totalBalance}
         periodIncome={summary.periodIncome}
@@ -198,7 +323,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         periodLabel={getPeriodLabel(period)}
       />
 
-      {/* 3. Grafik Pemasukan vs Pengeluaran & Grafik Pengeluaran Kategori (Sections 6, 7, 8) */}
+      {/* 3. Grafik Pemasukan vs Pengeluaran & Grafik Pengeluaran Kategori */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className="lg:col-span-7">
           <CashFlowChart
@@ -214,7 +339,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* 4. Grafik Perkembangan Saldo (Section 9) */}
+      {/* 4. Grafik Perkembangan Saldo */}
       <div>
         <BalanceProgressChart
           data={balanceProgressData}
@@ -222,13 +347,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         />
       </div>
 
-      {/* 5. Analisis Otomatis & Akun Saldo Terbesar (Sections 22, 23, 24) */}
+      {/* 5. Analisis Otomatis & Akun Saldo Terbesar */}
       <FinancialAnalysisCard
         insights={automatedInsights}
         periodLabel={getPeriodLabel(period)}
       />
 
-      {/* 6. Transaksi Terbaru (Maksimal 10) (Section 21) */}
+      {/* 6. Transaksi Terbaru (Maksimal 10) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -236,9 +361,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <h3 className="text-base font-bold text-slate-900">
               Transaksi Terbaru
             </h3>
-            <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
-              10 Terakhir
-            </span>
+            <span className="text-xs text-slate-500">· 10 Terakhir</span>
           </div>
 
           {transactions.length > 0 && (
@@ -262,6 +385,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
           emptyMessage="Belum ada transaksi tercatat."
         />
       </div>
+
+      {/* Bank TopUp / Edit Saldo Modal on Dashboard */}
+      {onRecordBankIncome && onDirectAdjustBalance && (
+        <BankTopUpModal
+          isOpen={!!topUpBankAccount}
+          account={topUpBankAccount}
+          onClose={() => setTopUpBankAccount(null)}
+          onRecordBankIncome={onRecordBankIncome}
+          onDirectAdjustBalance={onDirectAdjustBalance}
+        />
+      )}
     </div>
   );
 };

@@ -6,7 +6,7 @@ import {
   deleteDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, safeWrite, handleFirestoreError, OperationType } from './firebase';
 import { Budget } from '../types';
 
 export function subscribeBudgets(
@@ -25,7 +25,6 @@ export function subscribeBudgets(
         ...(d.data() as Omit<Budget, 'id'>),
       }));
 
-      // Sort by category name
       items.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
       onData(items);
     },
@@ -69,13 +68,14 @@ export async function createBudget(
       updatedAt: now,
     };
 
-    await setDoc(docRef, newBudget);
+    await safeWrite(setDoc(docRef, newBudget));
     return docRef.id;
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal anggaran')) {
       throw error;
     }
     handleFirestoreError(error, OperationType.CREATE, path);
+    return '';
   }
 }
 
@@ -99,13 +99,15 @@ export async function updateBudget(
       throw new Error('Nominal anggaran harus lebih dari 0.');
     }
 
-    await updateDoc(docRef, {
-      categoryId: data.categoryId,
-      categoryName: data.categoryName,
-      periodMonth: data.periodMonth,
-      amount: cleanAmount,
-      updatedAt: now,
-    });
+    await safeWrite(
+      updateDoc(docRef, {
+        categoryId: data.categoryId,
+        categoryName: data.categoryName,
+        periodMonth: data.periodMonth,
+        amount: cleanAmount,
+        updatedAt: now,
+      })
+    );
   } catch (error) {
     if (error instanceof Error && error.message.includes('Nominal anggaran')) {
       throw error;
@@ -118,7 +120,7 @@ export async function deleteBudget(userId: string, budgetId: string): Promise<vo
   const path = `users/${userId}/budgets/${budgetId}`;
   try {
     const docRef = doc(db, 'users', userId, 'budgets', budgetId);
-    await deleteDoc(docRef);
+    await safeWrite(deleteDoc(docRef));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
